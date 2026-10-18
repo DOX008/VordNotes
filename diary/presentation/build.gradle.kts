@@ -54,6 +54,7 @@ android {
 
 dependencies {
     implementation(project(":ai:presentation"))
+    implementation(project(":ai:domain"))
     implementation(project(":diary:domain"))
     implementation(project(":core:util"))
     implementation(project(":notes:domain"))

@@ -15,7 +15,9 @@ class BootBroadcastReceiver : BroadcastReceiver(), KoinComponent {
     private val alarmScheduler: AlarmScheduler by inject()
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+        if (intent?.action == Intent.ACTION_BOOT_COMPLETED ||
+            intent?.action == Intent.ACTION_MY_PACKAGE_REPLACED
+        ) {
             runBlocking {
                 val alarms = getAllAlarms()
                 alarms.forEach {

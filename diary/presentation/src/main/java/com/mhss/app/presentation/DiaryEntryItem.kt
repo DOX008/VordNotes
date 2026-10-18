@@ -1,17 +1,17 @@
 package com.mhss.app.presentation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,17 +42,17 @@ fun LazyItemScope.DiaryEntryItem(
     onPlayPauseClick: () -> Unit,
     onClick: (DiaryEntry) -> Unit
 ) {
-    Card(
+    Box(
         modifier = modifier
-            .padding(horizontal = 12.dp)   // ✅ SIDOPADDING (SAKNADES)
-            .animateItem(),
-        shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.elevatedCardElevation(6.dp)
+            .padding(horizontal = 12.dp)
+            .animateItem()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
     ) {
         Column(
             modifier = Modifier
                 .clickable { onClick(entry) }
-                .padding(12.dp)            // inre padding (korrekt)
+                .padding(12.dp)
                 .fillMaxWidth()
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -70,6 +70,7 @@ fun LazyItemScope.DiaryEntryItem(
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.Bold
                     ),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -103,6 +104,7 @@ fun LazyItemScope.DiaryEntryItem(
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.End)
             )
         }

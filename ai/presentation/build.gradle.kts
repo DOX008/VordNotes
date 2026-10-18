@@ -86,4 +86,14 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.squircle.shape)
+
+    implementation("com.github.yalantis:ucrop:2.2.8")
+    implementation("androidx.compose.foundation:foundation")
+    val camerax = "1.3.4"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-view:$camerax")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation("androidx.activity:activity-ktx:1.9.3")
 }

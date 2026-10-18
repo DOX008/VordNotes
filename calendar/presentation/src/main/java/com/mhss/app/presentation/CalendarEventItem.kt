@@ -50,11 +50,13 @@ fun LazyItemScope.CalendarEventItem(
     val isPast = event.start < now()
     val textColor = if (isPast) Color.Red else MaterialTheme.colorScheme.onSurface
 
-
     Card(
         modifier = modifier.animateItem(),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.elevatedCardElevation(8.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

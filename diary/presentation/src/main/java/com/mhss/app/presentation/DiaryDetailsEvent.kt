@@ -7,8 +7,8 @@ sealed class DiaryDetailsEvent {
     data object ToggleReadingMode : DiaryDetailsEvent()
     data class ScreenOnStop(val currentEntry: DiaryEntry) : DiaryDetailsEvent()
 
-    // Lägg till dessa:
     data class Summarize(val text: String) : DiaryDetailsEvent()
     data class AutoFormat(val text: String) : DiaryDetailsEvent()
     data class CorrectSpelling(val text: String) : DiaryDetailsEvent()
+    data object AiResultHandled : DiaryDetailsEvent()
 }

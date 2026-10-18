@@ -149,10 +149,11 @@
     <string name="cancel_changes">Avbryt ändringar</string>
     <string name="add_entry">Lägg till inlägg</string>
     <string name="awesome">Fantastiskt</string>
-    <string name="good">Bra</string>
-    <string name="okay">Okej</string>
-    <string name="bad">Dåligt</string>
-    <string name="terrible">Hemskt</string>
+    <string name="fantastic">Utmärkt</string>
+    <string name="good">Gott</string>
+    <string name="okay">Stabilt</string>
+    <string name="bad">Nedsatt</string>
+    <string name="terrible">Kritiskt</string>
     <string name="delete_entry">Ta bort inlägg</string>
     <string name="content">Din anteckning här:</string>
     <string name="save_entry">Spara inlägg</string>
@@ -279,5 +280,8 @@
     <string name="schedule_reset_shift">Varje pass</string>
     <string name="schedule_reset_day">Varje dygn</string>
     <string name="schedule_room">rum %1$s</string>
+    <string name="ocr_processing">Bearbetar…</string>
+    <string name="take_photo">Ta foto</string>
+    <string name="close">Stäng</string>
 </resources>
 

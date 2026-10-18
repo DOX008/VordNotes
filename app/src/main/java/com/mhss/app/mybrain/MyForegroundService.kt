@@ -16,9 +16,6 @@ import com.mhss.app.ui.R as UiR
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import android.app.AlarmManager
-import android.content.Context
-import android.os.SystemClock
 
 class MyForegroundService : Service() {
 
@@ -36,6 +33,7 @@ class MyForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Must come first so startForegroundService() is always satisfied in time
         ensureForeground()
+        if (!isForegroundStarted) return START_NOT_STICKY
 
         intent?.let {
             if (
@@ -56,7 +54,7 @@ class MyForegroundService : Service() {
             Log.e("MyForegroundService", "Failed to update notification", e)
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun ensureForeground() {
@@ -67,12 +65,19 @@ class MyForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1000001, minimal, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(1000001, minimal)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(1000001, minimal, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(1000001, minimal)
+            }
+            isForegroundStarted = true
+        } catch (e: Exception) {
+            // e.g. ForegroundServiceStartNotAllowedException (API 31+) when started from background.
+            // Alarms are delivered by AlarmManager, so the service is optional: stop instead of crashing.
+            Log.w("MyForegroundService", "Foreground start not allowed, stopping service", e)
+            stopSelf()
         }
-        isForegroundStarted = true
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -143,40 +148,4 @@ class MyForegroundService : Service() {
         val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
         return formatter.format(Date(timestamp))
     }
-    override fun onTaskRemoved(rootIntent: Intent?) {
-
-        val restartIntent = Intent(applicationContext, MyForegroundService::class.java).apply {
-            setPackage(packageName)
-        }
-
-        val restartPendingIntent =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                PendingIntent.getForegroundService(
-                    this,
-                    0,
-                    restartIntent,
-                    PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-                )
-            } else {
-                PendingIntent.getService(
-                    this,
-                    0,
-                    restartIntent,
-                    PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
-
-        val alarmManager =
-            getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        alarmManager.set(
-            AlarmManager.ELAPSED_REALTIME,
-            SystemClock.elapsedRealtime() + 1000,
-            restartPendingIntent
-        )
-
-        super.onTaskRemoved(rootIntent)
-    }
-
-
 }

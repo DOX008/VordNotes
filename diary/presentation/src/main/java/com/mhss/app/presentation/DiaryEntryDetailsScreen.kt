@@ -21,6 +21,9 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.navigation.NavHostController
 import com.mhss.app.domain.model.DiaryEntry
 import com.mhss.app.domain.model.Mood
+import com.mhss.app.presentation.components.AiActionsRow
+import com.mhss.app.presentation.components.AiResultOverlay
+import com.mhss.app.presentation.components.rememberOcrLauncher
 import com.mhss.app.ui.R
 import com.mhss.app.ui.components.common.DateTimeDialog
 import com.mhss.app.ui.components.common.MyBrainAppBar
@@ -59,6 +62,12 @@ fun DiaryEntryDetailsScreen(
     var openDeleteDialog by rememberSaveable { mutableStateOf(false) }
     var patientMenuOpen by remember { mutableStateOf(false) }
     val showPatientMenu = patientMenuOpen && diaryState.patientSuggestions.isNotEmpty()
+
+    val ocrLauncher = rememberOcrLauncher(
+        actions = viewModel.aiActions,
+        content = content,
+        onContentChange = { content = it }
+    )
 
     LaunchedEffect(state.entry) {
         if (state.entry != null) {
@@ -189,6 +198,14 @@ fun DiaryEntryDetailsScreen(
                 }
             }
 
+            AiActionsRow(
+                onSummarize = { viewModel.onEvent(DiaryDetailsEvent.Summarize(content)) },
+                onAutoFormat = { viewModel.onEvent(DiaryDetailsEvent.AutoFormat(content)) },
+                onCorrectSpelling = { viewModel.onEvent(DiaryDetailsEvent.CorrectSpelling(content)) },
+                onCameraClick = ocrLauncher.onCameraClick,
+                onGalleryClick = ocrLauncher.onGalleryClick
+            )
+
             Spacer(Modifier.height(8.dp))
 
             if (readingMode) {
@@ -224,6 +241,12 @@ fun DiaryEntryDetailsScreen(
                 )
             }
         }
+
+        AiResultOverlay(
+            actions = viewModel.aiActions,
+            content = content,
+            onContentChange = { content = it }
+        )
 
         if (showDateDialog) {
             DateTimeDialog(

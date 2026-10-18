@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -39,8 +40,12 @@ private val WideIconSize = 96.dp
 fun SpacesScreenGrid(
     navController: NavHostController
 ) {
+    // Samma kortfärg som NoteCard, TaskCard och NotesScreen
+    val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+
     Scaffold(
         containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = { MyBrainAppBar(stringResource(R.string.spaces)) }
     ) { paddingValues ->
 
@@ -73,11 +78,9 @@ fun SpacesScreenGrid(
                         title = stringResource(R.string.notes),
                         subtitle = stringResource(R.string.notes_subtitle),
                         image = R.drawable.notes_img,
-                        backgroundColor = Color(0xFF3F51B5),
+                        backgroundColor = cardColor,
                         iconSize = GridIconSize,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxSize(),
                         cardShape = RoundedCornerShape(Big, Big, Inner, Big),
                         onClick = { navController.navigate(Screen.NotesScreen()) }
                     )
@@ -86,11 +89,9 @@ fun SpacesScreenGrid(
                         title = stringResource(R.string.tasks),
                         subtitle = stringResource(R.string.tasks_subtitle),
                         image = R.drawable.tasks_img,
-                        backgroundColor = Color(0xFF3F51B5),
+                        backgroundColor = cardColor,
                         iconSize = GridIconSize,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxSize(),
                         cardShape = RoundedCornerShape(Big, Big, Big, Inner),
                         onClick = { navController.navigate(Screen.TasksScreen()) }
                     )
@@ -108,12 +109,10 @@ fun SpacesScreenGrid(
                         title = stringResource(R.string.diary),
                         subtitle = stringResource(R.string.diary_subtitle),
                         image = R.drawable.diary_img,
-                        backgroundColor = Color(0xFF3F51B5),
+                        backgroundColor = cardColor,
                         isPulsing = true,
                         iconSize = GridIconSize,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxSize(),
                         cardShape = RoundedCornerShape(Big, Inner, Big, Big),
                         onClick = { navController.navigate(Screen.DiaryScreen) }
                     )
@@ -122,11 +121,9 @@ fun SpacesScreenGrid(
                         title = stringResource(R.string.calendar),
                         subtitle = stringResource(R.string.calendar_subtitle),
                         image = R.drawable.calendar_img,
-                        backgroundColor = Color(0xFF3F51B5),
+                        backgroundColor = cardColor,
                         iconSize = GridIconSize,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize(),
+                        modifier = Modifier.weight(1f).fillMaxSize(),
                         cardShape = RoundedCornerShape(Inner, Big, Big, Big),
                         onClick = { navController.navigate(Screen.CalendarScreen) }
                     )
@@ -138,10 +135,8 @@ fun SpacesScreenGrid(
                     title = stringResource(R.string.bookmarks),
                     subtitle = stringResource(R.string.bookmarks_subtitle),
                     image = R.drawable.bookmarks_img,
-                    backgroundColor = Color(0xFF3F51B5),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(WideCardHeight),
+                    backgroundColor = cardColor,
+                    modifier = Modifier.fillMaxWidth().height(WideCardHeight),
                     cardShape = RoundedCornerShape(Big),
                     iconSize = WideIconSize,
                     onClick = { navController.navigate(Screen.BookmarksScreen) }
@@ -153,10 +148,8 @@ fun SpacesScreenGrid(
                     title = stringResource(R.string.assistant),
                     subtitle = stringResource(R.string.assistant_subtitle),
                     image = R.drawable.ai_chat_img,
-                    backgroundColor = Color(0xFF3F51B5),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(WideCardHeight),
+                    backgroundColor = cardColor,
+                    modifier = Modifier.fillMaxWidth().height(WideCardHeight),
                     cardShape = RoundedCornerShape(Big),
                     iconSize = WideIconSize,
                     onClick = { navController.navigate(Screen.AssistantScreen) }

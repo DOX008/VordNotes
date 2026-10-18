@@ -145,10 +145,11 @@
     <string name="url">URL</string>
     <string name="add_entry">Add entry</string>
     <string name="awesome">Awesome</string>
+    <string name="fantastic">Excellent</string>
     <string name="good">Good</string>
-    <string name="okay">Okay</string>
-    <string name="bad">Bad</string>
-    <string name="terrible">Terrible</string>
+    <string name="okay">Stable</string>
+    <string name="bad">Poor</string>
+    <string name="terrible">Critical</string>
     <string name="delete_entry">Delete entry</string>
     <string name="content">Content</string>
     <string name="save_entry">Save entry</string>
@@ -276,4 +277,7 @@
     <string name="schedule_reset_shift">Every shift</string>
     <string name="schedule_reset_day">Every day</string>
     <string name="schedule_room">rom %1$s</string>
+    <string name="ocr_processing">Processing…</string>
+    <string name="take_photo">Take photo</string>
+    <string name="close">Close</string>
 </resources>

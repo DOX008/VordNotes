@@ -32,7 +32,8 @@ fun MainScreen(
         )
     Scaffold(
         modifier = modifier,
-        containerColor = Color.Transparent,   // <-- LÄGG TILL DENNA!
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             MainBottomBar(navController = navController, items = bottomNavItems)
         },

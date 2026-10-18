@@ -2,6 +2,7 @@ package com.mhss.app.ui.components.tasks
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,8 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,25 +35,22 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.mhss.app.domain.model.Task
-import com.mhss.app.ui.R
+import com.google.accompanist.flowlayout.FlowRow
 import com.mhss.app.domain.model.Priority
 import com.mhss.app.domain.model.SubTask
+import com.mhss.app.domain.model.Task
+import com.mhss.app.ui.R
 import com.mhss.app.ui.color
-import androidx.compose.foundation.background
-import com.google.accompanist.flowlayout.FlowRow
 import com.mhss.app.ui.components.common.TTSSpeakerIcon
 import com.mhss.app.util.date.formatTime
 
-
-// --- RÖD GENOMSTRYKNING (samma teknik som i Calendar) ---
 private fun Modifier.redStrikeThrough(enabled: Boolean, strokeWidthDp: Float = 2f) =
     if (!enabled) this else this.then(
         Modifier.drawWithContent {
-            drawContent() // rita texten först, linjen ovanpå
+            drawContent()
             val y = size.height / 2f
             drawLine(
-                color = Color.Red,             // samma röda som i calendar
+                color = Color.Red,
                 start = Offset(0f, y),
                 end = Offset(size.width, y),
                 strokeWidth = strokeWidthDp.dp.toPx(),
@@ -73,26 +69,23 @@ fun LazyItemScope.TaskCard(
     val context = LocalContext.current
     var isTTSPlaying by rememberSaveable { mutableStateOf(false) }
 
-    Card(
+    Box(
         modifier = modifier
             .padding(horizontal = 8.dp)
-            .animateItem(),
-        shape = RoundedCornerShape(25.dp),
-        elevation = CardDefaults.elevatedCardElevation(8.dp),
+            .animateItem()
+            .clip(RoundedCornerShape(25.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
     ) {
-        // Box för att kunna lägga TTS-ikonen ovanpå innehållet i nedre högra hörnet
         Box(Modifier.fillMaxWidth()) {
             Column(
                 Modifier
                     .clickable { onClick() }
                     .padding(12.dp)
             ) {
-                // RAD 1: Prioritet-cirkel, titel och klocka/reminder (längst till höger)
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Rund cirkel för prioritet
                     Canvas(
                         modifier = Modifier
                             .size(25.dp)
@@ -104,18 +97,18 @@ fun LazyItemScope.TaskCard(
                             radius = size.minDimension / 2
                         )
                     }
-                    // Titel (röd genomstrykning när completed)
+
                     Text(
                         text = task.title,
                         style = MaterialTheme.typography.titleLarge.copy(
                             textDecoration = TextDecoration.None
                         ),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .redStrikeThrough(task.isCompleted)
+                        modifier = Modifier.redStrikeThrough(task.isCompleted)
                     )
-                    // Klocka/reminder längst till höger
+
                     if (task.dueDate != 0L) {
                         Spacer(Modifier.width(8.dp))
                         Icon(
@@ -131,25 +124,22 @@ fun LazyItemScope.TaskCard(
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
                         )
-
                     }
                 }
 
-                // RAD 2: Underkategorier + progress
                 Spacer(modifier = Modifier.height(15.dp))
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 5.dp, bottom = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 2/4‐indikatorn före chipsen
                     SubTasksProgressBar(
                         modifier = Modifier.padding(end = 8.dp),
                         subTasks = task.subTasks
                     )
 
-                    // Sub‐task‐chips (röd linje när ibockad)
                     FlowRow(
                         modifier = Modifier.weight(1f),
                         mainAxisSpacing = 8.dp,
@@ -174,8 +164,8 @@ fun LazyItemScope.TaskCard(
                     }
                 }
 
-                // ---- Description under sub-tasks! ----
                 Spacer(modifier = Modifier.height(2.dp))
+
                 if (task.description.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -183,14 +173,12 @@ fun LazyItemScope.TaskCard(
                         style = MaterialTheme.typography.bodyLarge.copy(
                             textDecoration = TextDecoration.None
                         ),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 20,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    // Reservutrymme så att TTS-ikonen inte överlappar texten
                     Spacer(modifier = Modifier.height(5.dp))
-
-
                 }
             }
         }
@@ -234,10 +222,10 @@ fun SubTasksProgressBar(modifier: Modifier = Modifier, subTasks: List<SubTask>) 
         }
         val circleColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.2f)
         val progressColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
+
         Canvas(
             modifier = Modifier.size(16.dp)
         ) {
-            // CIRKEL
             drawCircle(
                 color = circleColor,
                 radius = size.width / 2,
@@ -251,6 +239,7 @@ fun SubTasksProgressBar(modifier: Modifier = Modifier, subTasks: List<SubTask>) 
                 useCenter = false
             )
         }
+
         Spacer(Modifier.width(8.dp))
         Text(
             text = "$completed/$total",

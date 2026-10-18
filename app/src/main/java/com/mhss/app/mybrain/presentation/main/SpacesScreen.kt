@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,13 +22,16 @@ import com.mhss.app.ui.components.common.MyBrainAppBar
 import com.mhss.app.ui.navigation.Screen
 import com.mhss.app.ui.theme.MyBrainTheme
 
-
 @Composable
 fun SpacesScreen(
     navController: NavHostController
 ) {
+    // Samma kortfärg som NoteCard, TaskCard och NotesScreen
+    val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+
     Scaffold(
         containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             MyBrainAppBar(stringResource(R.string.spaces))
         }
@@ -43,18 +47,14 @@ fun SpacesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-
-            // 🔹 VANLIGA MENYRADAR (Notes, Tasks, osv)
             items(spaces) { (title, subtitle, image, screen) ->
                 SpaceCard(
                     title = stringResource(title),
                     subtitleRes = subtitle,
                     image = image,
-                    backgroundColor = Color(0xFF293547),
-                    isPulsing = title == R.string.diary, // 🔥 ONLY DIARY
-                    onClick = {
-                        navController.navigate(screen)
-                    }
+                    backgroundColor = cardColor,
+                    isPulsing = title == R.string.diary,
+                    onClick = { navController.navigate(screen) }
                 )
             }
 
@@ -63,11 +63,9 @@ fun SpacesScreen(
                     title = stringResource(R.string.assistant),
                     subtitleRes = R.string.assistant_subtitle,
                     image = R.drawable.ai_chat_img,
-                    backgroundColor = Color(0xFF293547),
+                    backgroundColor = cardColor,
                     isPulsing = false,
-                    onClick = {
-                        navController.navigate(Screen.AssistantScreen)
-                    }
+                    onClick = { navController.navigate(Screen.AssistantScreen) }
                 )
             }
         }

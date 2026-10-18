@@ -37,8 +37,9 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.mhss.app.ui.R
-import com.mhss.app.presentation.components.AiResultSheet
-import com.mhss.app.presentation.components.GradientIconButton
+import com.mhss.app.presentation.components.AiActionsRow
+import com.mhss.app.presentation.components.AiResultOverlay
+import com.mhss.app.presentation.components.rememberOcrLauncher
 import com.mhss.app.presentation.components.ShareNoteAsPlainTextOption
 import com.mhss.app.ui.components.common.MyBrainAppBar
 import com.mhss.app.ui.theme.Orange
@@ -123,226 +124,14 @@ fun NoteDetailsScreen(
     var lastModified by remember { mutableStateOf("") }
     var wordCountString by remember { mutableStateOf("") }
     val aiEnabled by viewModel.aiEnabled.collectAsStateWithLifecycle()
-    val aiState = viewModel.aiState
-    val showAiSheet = aiState.showAiSheet
 
     var showPinsDialog by rememberSaveable { mutableStateOf(false) }
 
-    // === NYTT: OCR med språkval, preprocessing och CameraX ===
-    var isOcrRunning by rememberSaveable { mutableStateOf(false) }
-
-// Språkväljare (sv/en). ML Kit Latin används för båda – men vi sparar valet för ev. framtida regler.
-    var selectedLang by rememberSaveable { mutableStateOf("sv") } // "sv" eller "en"
-
-    // Skapa en fil-URI i cache som kameran/galleri skriver till (kräver FileProvider i manifestet)
-    fun newImageUri(): Uri {
-        val imagesDir = File(context.cacheDir, "images").apply { mkdirs() }
-        val photo = File.createTempFile("ocr_", ".jpg", imagesDir)
-        return FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            photo
-        )
-    }
-
-    var pendingPhotoUri by remember { mutableStateOf<Uri?>(null) }
-
-    // EXIF -> rotationsgrader
-    fun exifRotationDegrees(context: Context, uri: Uri): Int {
-        return try {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                val exif = ExifInterface(input)
-                when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-                    ExifInterface.ORIENTATION_ROTATE_90 -> 90
-                    ExifInterface.ORIENTATION_ROTATE_180 -> 180
-                    ExifInterface.ORIENTATION_ROTATE_270 -> 270
-                    else -> 0
-                }
-            } ?: 0
-        } catch (_: Exception) { 0 }
-    }
-
-    // Ladda bitmap med korrekt rotation
-    fun loadBitmapCorrectRotation(context: Context, uri: Uri): Bitmap {
-        val src = if (Build.VERSION.SDK_INT >= 28) {
-            val srcImage = ImageDecoder.createSource(context.contentResolver, uri)
-            ImageDecoder.decodeBitmap(srcImage) { decoder, _, _ -> decoder.isMutableRequired = true }
-        } else {
-            @Suppress("DEPRECATION")
-            MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
-        }
-        val deg = exifRotationDegrees(context, uri)
-        if (deg == 0) return src
-        val m = Matrix().apply { postRotate(deg.toFloat()) }
-        return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
-    }
-
-    // Enkel preprocessing: gråskala + kontrast (1.25x som default)
-    fun preprocessBitmap(src: Bitmap, contrast: Float = 1.25f): Bitmap {
-        val w = src.width
-        val h = src.height
-        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(out)
-        val cm = ColorMatrix().apply {
-            setSaturation(0f) // gråskala
-            val c = ColorMatrix(
-                floatArrayOf(
-                    contrast, 0f, 0f, 0f, 0f,
-                    0f, contrast, 0f, 0f, 0f,
-                    0f, 0f, contrast, 0f, 0f,
-                    0f, 0f, 0f, 1f, 0f
-                )
-            )
-            postConcat(c)
-        }
-        val paint = Paint().apply { colorFilter = ColorMatrixColorFilter(cm) }
-        canvas.drawBitmap(src, 0f, 0f, paint)
-        return out
-    }
-
-    // (valfritt) spara kopia i Galleri så den syns i Photos
-    fun saveToGalleryFromUri(src: Uri): Uri? {
-        return try {
-            val resolver = context.contentResolver
-            val name = "MyBrain_${System.currentTimeMillis()}.jpg"
-            val values = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, name)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyBrain")
-            }
-            val target = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-            if (target != null) {
-                resolver.openInputStream(src).use { input ->
-                    resolver.openOutputStream(target).use { output ->
-                        if (input == null || output == null) return null
-                        input.copyTo(output)
-                    }
-                }
-            }
-            target
-        } catch (_: Exception) { null }
-    }
-
-    // Kör OCR på vald Uri, med preprocessing och korrekt rotation
-    fun runOcrOnUri(uri: Uri) {
-        isOcrRunning = true
-        try {
-            val bmp = loadBitmapCorrectRotation(context, uri)
-            val pre = preprocessBitmap(bmp, contrast = 1.25f)
-
-            // Bitmap → Base64 (för OpenAI Vision)
-            val base64 = pre.toBase64()
-
-            viewModel.runVisionOcr(
-                base64Image = base64,
-                onDone = {
-                    isOcrRunning = false
-                },
-                onError = {
-                    isOcrRunning = false
-                    // TODO: visa fel/snackbar/logg om du vill
-                }
-            )
-        } catch (e: Exception) {
-            isOcrRunning = false
-            // TODO: visa fel/snackbar/logg
-        }
-    }
-
-
-// === CameraX: visa en dialog med preview och ta bild ===
-    var showCameraX by rememberSaveable { mutableStateOf(false) }
-
-// === Image CROP (uCrop) ===
-// Launcher som tar emot resultatet från uCrop och skickar vidare till OCR
-    val cropLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { res ->
-        if (res.resultCode == android.app.Activity.RESULT_OK) {
-            val data = res.data
-            val resultUri = com.yalantis.ucrop.UCrop.getOutput(data!!)
-            if (resultUri != null) {
-                // -> Nu kör vi OCR på den beskurna bilden
-                runOcrOnUri(resultUri)
-            }
-        } else if (res.resultCode == com.yalantis.ucrop.UCrop.RESULT_ERROR) {
-            val err = com.yalantis.ucrop.UCrop.getError(res.data!!)
-            // TODO: visa fel/snackbar/logg om du vill
-        }
-    }
-
-    /**
-     * Startar uCrop för att låta användaren beskära bilden innan OCR.
-     * @param source Uri till originalbilden
-     */
-    fun startCrop(source: Uri) {
-        // Säkerställ Activity-context (UCrop behöver det)
-        val activity = (context as? Activity) ?: return
-
-        // Skapa en måldestination i cache
-        val destUri = Uri.fromFile(
-            File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg")
-        )
-
-        // uCrop-konfiguration
-        val options = com.yalantis.ucrop.UCrop.Options().apply {
-            setHideBottomControls(false)
-            setFreeStyleCropEnabled(true)
-            setShowCropGrid(true)
-            setCompressionQuality(95)
-        }
-
-        // Bygg intenten med Activity-context
-        val intent = com.yalantis.ucrop.UCrop
-            .of(source, destUri)
-            .withOptions(options)
-            .withMaxResultSize(4096, 4096)
-            .getIntent(activity)
-
-        // Viktigt för content:// URIs
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-
-        // Starta crop-aktiviteten
-        cropLauncher.launch(intent)
-    }
-// === /Image CROP (uCrop) ===
-
-// Galleri: Photo Picker + fallback GetContent
-    val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri -> uri?.let { startCrop(it) } }
-
-    val getContent = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { startCrop(it) } }
-
-// Kameratillstånd
-    val requestCameraPermission = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) showCameraX = true
-        else {
-            // TODO: feedback: "Kameratillstånd krävs"
-        }
-    }
-
-// Starta kameraflödet (CameraX) med permission-check
-    val onCameraClick: () -> Unit = {
-        val hasPermission =
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        if (hasPermission) showCameraX = true else requestCameraPermission.launch(Manifest.permission.CAMERA)
-    }
-
-// Starta galleri-flödet (Photo Picker med fallback)
-    val onGalleryClick: () -> Unit = {
-        if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)) {
-            pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        } else {
-            getContent.launch("image/*")
-        }
-    }
-// === /NYTT OCR ===
+    val ocrLauncher = rememberOcrLauncher(
+        actions = viewModel.aiActions,
+        content = content,
+        onContentChange = { viewModel.onEvent(NoteDetailsEvent.UpdateContent(it)) }
+    )
 
 
 
@@ -372,24 +161,6 @@ fun NoteDetailsScreen(
         }
     }
 
-    // === “Bearbetar…” overlay när OCR körs ===
-    if (isOcrRunning) {
-        Dialog(onDismissRequest = { /* blockera dismiss medan vi bearbetar */ }) {
-            Box(
-                modifier = Modifier
-                    .size(140.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(MaterialTheme.colorScheme.surface),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Spacer(Modifier.height(12.dp))
-                    Text("Bearbetar…", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
         contentColor = MaterialTheme.colorScheme.onBackground,
@@ -542,60 +313,13 @@ fun NoteDetailsScreen(
 
 
             AnimatedVisibility(aiEnabled) {
-                LazyRow(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    item {
-                        GradientIconButton(
-                            text = stringResource(id = R.string.summarize),
-                            iconPainter = painterResource(id = R.drawable.ic_summarize),
-                        ) {
-                            viewModel.onEvent(NoteDetailsEvent.Summarize(content))
-                            keyboardController?.hide()
-                        }
-                    }
-                    item {
-                        GradientIconButton(
-                            text = stringResource(id = R.string.auto_format),
-                            iconPainter = painterResource(id = R.drawable.ic_auto_format),
-                        ) {
-                            viewModel.onEvent(NoteDetailsEvent.AutoFormat(content))
-                            keyboardController?.hide()
-                        }
-                    }
-                    item {
-                        GradientIconButton(
-                            text = stringResource(id = R.string.correct_spelling),
-                            iconPainter = painterResource(id = R.drawable.ic_spelling),
-                        ) {
-                            viewModel.onEvent(NoteDetailsEvent.CorrectSpelling(content))
-                            keyboardController?.hide()
-                        }
-                    }
-
-                    item {
-                        GradientIconButton(
-                            text = "",
-                            iconPainter = painterResource(id = R.drawable.ic_camera),
-                        ) {
-                            onCameraClick()         // <— byt till denna
-                            keyboardController?.hide()
-                        }
-                    }
-                    item {
-                        GradientIconButton(
-                            text = "",
-                            iconPainter = painterResource(id = android.R.drawable.ic_menu_gallery),
-                        ) {
-                            onGalleryClick()
-                            keyboardController?.hide()
-                        }
-                    }
-                }
+                AiActionsRow(
+                    onSummarize = { viewModel.onEvent(NoteDetailsEvent.Summarize(content)) },
+                    onAutoFormat = { viewModel.onEvent(NoteDetailsEvent.AutoFormat(content)) },
+                    onCorrectSpelling = { viewModel.onEvent(NoteDetailsEvent.CorrectSpelling(content)) },
+                    onCameraClick = ocrLauncher.onCameraClick,
+                    onGalleryClick = ocrLauncher.onGalleryClick
+                )
             }
 
             if (readingMode)
@@ -647,49 +371,11 @@ fun NoteDetailsScreen(
                 )
             }
         }
-        AnimatedVisibility(
-            visible = showAiSheet,
-            enter = slideInVertically(
-                initialOffsetY = { it }, animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessVeryLow
-                )
-            ),
-            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(700))
-        ) {
-            val interactionSource = remember { MutableInteractionSource() }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) {
-                        viewModel.onEvent(NoteDetailsEvent.AiResultHandled)
-                    }, contentAlignment = Alignment.BottomCenter
-            ) {
-                AiResultSheet(
-                    loading = aiState.loading,
-                    result = aiState.result,
-                    error = aiState.error?.toUserMessage(),
-                    onCopyClick = {
-                        val clipboard =
-                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("ai result", aiState.result.toString())
-                        clipboard.setPrimaryClip(clip)
-                        viewModel.onEvent(NoteDetailsEvent.AiResultHandled)
-                    },
-                    onReplaceClick = {
-                        viewModel.onEvent(NoteDetailsEvent.UpdateContent(aiState.result.toString()))
-                        viewModel.onEvent(NoteDetailsEvent.AiResultHandled)
-                    },
-                    onAddToNoteClick = {
-                        viewModel.onEvent(NoteDetailsEvent.UpdateContent(aiState.result + "\n" + content))
-                        viewModel.onEvent(NoteDetailsEvent.AiResultHandled)
-                    }
-                )
-            }
-        }
+        AiResultOverlay(
+            actions = viewModel.aiActions,
+            content = content,
+            onContentChange = { viewModel.onEvent(NoteDetailsEvent.UpdateContent(it)) }
+        )
         if (openDeleteDialog)
             AlertDialog(
                 shape = RoundedCornerShape(25.dp),
@@ -809,113 +495,6 @@ fun NoteDetailsScreen(
                 onTogglePin = { pin -> viewModel.onEvent(NoteDetailsEvent.TogglePin(pin.id)) },
                 onDismiss = { showPinsDialog = false }
             )
-        }
-
-        if (showCameraX) {
-            CameraXCaptureDialog(
-                onDismiss = { showCameraX = false },
-                onPhoto = { uri -> startCrop(uri) },
-                newImageUri = { newImageUri() }
-            )
-        }
-    }
-}
-
-@Composable
-fun CameraXCaptureDialog(
-    onDismiss: () -> Unit,
-    onPhoto: (Uri) -> Unit,
-    newImageUri: () -> Uri
-) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(520.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.Black),
-        ) {
-            val context = LocalContext.current
-            val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-
-            var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
-
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx).apply {
-                        scaleType = PreviewView.ScaleType.FIT_CENTER
-                    }
-
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-                        val preview = Preview.Builder().build().also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-                        imageCapture = ImageCapture.Builder()
-                            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                            .build()
-
-                        val selector = CameraSelector.DEFAULT_BACK_CAMERA
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner, selector, preview, imageCapture
-                            )
-                        } catch (_: Exception) {}
-                    }, ContextCompat.getMainExecutor(ctx))
-
-                    previewView
-                }
-            )
-
-            // Avtryckare
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(18.dp)
-            ) {
-                Button(
-                    shape = CircleShape,
-                    onClick = {
-                        val ic = imageCapture ?: return@Button
-                        // Spara direkt till MediaStore (syns i Galleri)
-                        val output = ImageCapture.OutputFileOptions.Builder(
-                            context.contentResolver,
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            ContentValues().apply {
-                                put(MediaStore.Images.Media.DISPLAY_NAME, "MyBrain_${System.currentTimeMillis()}.jpg")
-                                put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MyBrain")
-                            }
-                        ).build()
-
-                        ic.takePicture(
-                            output,
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageSavedCallback {
-                                override fun onError(exception: ImageCaptureException) {
-                                    onDismiss()
-                                }
-
-                                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                                    val saved = outputFileResults.savedUri ?: newImageUri()
-                                    onPhoto(saved)
-                                    onDismiss()
-                                }
-                            }
-                        )
-                    }
-                ) { Text("Ta bild") }
-            }
-
-            // Stäng-knapp
-            Box(modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)) {
-                OutlinedButton(onClick = onDismiss, shape = CircleShape) { Text("Stäng") }
-            }
         }
     }
 }

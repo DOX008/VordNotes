@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mhss.app.domain.model.DiaryEntry
 import com.mhss.app.domain.use_case.*
+import com.mhss.app.domain.use_case.SendAiMessageUseCase
+import com.mhss.app.preferences.domain.use_case.GetPreferenceUseCase
 import com.mhss.app.util.date.now
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -19,12 +21,16 @@ class DiaryDetailsViewModel(
     private val addEntry: AddDiaryEntryUseCase,
     private val updateEntry: UpdateDiaryEntryUseCase,
     private val deleteEntry: DeleteDiaryEntryUseCase,
+    getPreference: GetPreferenceUseCase,
+    sendAiMessage: SendAiMessageUseCase,
     @Named("applicationScope") private val applicationScope: CoroutineScope,
     entryId: Int
 ) : ViewModel() {
 
     var uiState by mutableStateOf(UiState())
         private set
+
+    val aiActions = AiEditorActions(viewModelScope, getPreference, sendAiMessage)
 
     init {
         viewModelScope.launch {
@@ -48,32 +54,12 @@ class DiaryDetailsViewModel(
                 uiState = uiState.copy(readingMode = !uiState.readingMode)
             }
 
-            is DiaryDetailsEvent.Summarize -> {
-                // Exempel på "dummy" GPT-svar – byt till riktig AI-call
-                uiState = uiState.copy(
-                    entry = uiState.entry?.copy(
-                        content = "Sammanfattning: " + event.text.take(120) + "..."
-                    )
-                )
-            }
+            is DiaryDetailsEvent.Summarize -> aiActions.run(AiTextAction.SUMMARIZE, event.text)
+            is DiaryDetailsEvent.AutoFormat -> aiActions.run(AiTextAction.AUTO_FORMAT, event.text)
+            is DiaryDetailsEvent.CorrectSpelling ->
+                aiActions.run(AiTextAction.CORRECT_SPELLING, event.text)
 
-            is DiaryDetailsEvent.AutoFormat -> {
-                // Exempel på auto-format (dummy): bara stor bokstav på första bokstav
-                uiState = uiState.copy(
-                    entry = uiState.entry?.copy(
-                        content = event.text.replaceFirstChar { it.uppercaseChar() }
-                    )
-                )
-            }
-
-            is DiaryDetailsEvent.CorrectSpelling -> {
-                // Exempel på dummy stavningskorrigering
-                uiState = uiState.copy(
-                    entry = uiState.entry?.copy(
-                        content = event.text.replace("teh", "the") // fejkexempel
-                    )
-                )
-            }
+            DiaryDetailsEvent.AiResultHandled -> aiActions.dismiss()
 
             is DiaryDetailsEvent.ScreenOnStop -> applicationScope.launch {
                 if (!uiState.navigateUp) {
