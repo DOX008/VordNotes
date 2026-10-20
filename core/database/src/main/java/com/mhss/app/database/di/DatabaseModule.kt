@@ -1,7 +1,9 @@
 package com.mhss.app.database.di
 
 import androidx.room.Room
+import com.google.firebase.auth.FirebaseAuth
 import com.mhss.app.database.MyBrainDatabase
+import com.mhss.app.database.UserDatabaseManager
 import com.mhss.app.database.migrations.MIGRATION_1_2
 import com.mhss.app.database.migrations.MIGRATION_2_3
 import com.mhss.app.database.migrations.MIGRATION_3_4
@@ -13,22 +15,11 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 val databaseModule = module {
+    single { UserDatabaseManager(androidContext()) }
+
     single {
-        Room.databaseBuilder(
-            androidContext(),
-            MyBrainDatabase::class.java,
-            MyBrainDatabase.DATABASE_NAME
-        )
-            .addMigrations(
-                MIGRATION_1_2,
-                MIGRATION_2_3,
-                MIGRATION_3_4,
-                MIGRATION_4_5,
-                MIGRATION_5_6,
-                MIGRATION_6_7,
-                MIGRATION_7_8
-            )
-            .build()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: "guest"
+        get<UserDatabaseManager>().getOrCreate(uid)
     }
 
     single { get<MyBrainDatabase>().noteDao() }

@@ -31,5 +31,7 @@ abstract class MyBrainDatabase: RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "by_brain_db"
+
+        fun databaseName(uid: String): String = "${DATABASE_NAME}_${uid}"
     }
 }
