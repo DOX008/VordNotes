@@ -24,6 +24,7 @@ import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
 import com.mhss.app.mybrain.InternetDetector
 import com.mhss.app.util.ApprovedUserConfig
+import com.mhss.app.util.UserDataPaths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,7 +52,10 @@ class AuthViewModel(
 ) : ViewModel() {
 
     private var syncPaused: Boolean = false
-    private val pendingSyncQueue = ArrayDeque<suspend () -> Unit>()
+
+    private val pendingSyncQueue =
+        ArrayDeque<suspend () -> Unit>()
+
     private val queueFileName = "pending_sync_queue.flag"
 
     private fun persistQueueFlag() {
@@ -199,7 +203,7 @@ class AuthViewModel(
                     val diary = diaryDao.getAllEntries().first()
                     val bookmarks = bookmarkDao.getAllBookmarks().first()
 
-                    val userRef = userRef(user.uid)
+                    val userRef = UserDataPaths.userRoot(firestore, user.uid)
                     val batch = firestore.batch()
 
                     notes.filter { it.id != 0 }.forEach { n ->
@@ -283,7 +287,7 @@ class AuthViewModel(
             return
         }
 
-        val base = firestore.collection("users").document(user.uid)
+        val base = UserDataPaths.userRoot(firestore, user.uid)
         Log.d(TAG, "downloadAllFromCloud: ENTER for uid=${user.uid}")
         _syncInProgress.value = true
 
@@ -292,119 +296,119 @@ class AuthViewModel(
         try {
             withContext(Dispatchers.IO) {
                 if (!runLogged("Folders") {
-                    val snap = base.collection("folders").get().await()
-                    val folders = snap.documents.mapNotNull { d ->
-                        val data = d.data ?: return@mapNotNull null
-                        NoteFolderEntity(
-                            id = (data["id"] as? Number)?.toInt() ?: 0,
-                            name = data["name"] as? String ?: "",
-                            parentId = (data["parentId"] as? Number)?.toInt()
-                        )
-                    }
-                    if (folders.isNotEmpty()) {
-                        noteDao.insertNoteFolders(folders)
-                    }
-                }) failedSteps.add("Folders")
+                        val snap = base.collection("folders").get().await()
+                        val folders = snap.documents.mapNotNull { d ->
+                            val data = d.data ?: return@mapNotNull null
+                            NoteFolderEntity(
+                                id = (data["id"] as? Number)?.toInt() ?: 0,
+                                name = data["name"] as? String ?: "",
+                                parentId = (data["parentId"] as? Number)?.toInt()
+                            )
+                        }
+                        if (folders.isNotEmpty()) {
+                            noteDao.insertNoteFolders(folders)
+                        }
+                    }) failedSteps.add("Folders")
 
                 if (!runLogged("Notes") {
-                    val snap = base.collection("notes").get().await()
-                    val validFolderIds = noteDao.getAllNoteFolders().first().map { it.id }.toSet()
-                    val notes = snap.documents.mapNotNull { d ->
-                        val data = d.data ?: return@mapNotNull null
-                        val rawFolderId = (data["folderId"] as? Number)?.toInt()
-                        val folderId = rawFolderId?.takeIf { it in validFolderIds }
+                        val snap = base.collection("notes").get().await()
+                        val validFolderIds = noteDao.getAllNoteFolders().first().map { it.id }.toSet()
+                        val notes = snap.documents.mapNotNull { d ->
+                            val data = d.data ?: return@mapNotNull null
+                            val rawFolderId = (data["folderId"] as? Number)?.toInt()
+                            val folderId = rawFolderId?.takeIf { it in validFolderIds }
 
-                        NoteEntity(
-                            title = data["title"] as? String ?: "",
-                            content = data["content"] as? String ?: "",
-                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                            pinned = data["pinned"] as? Boolean ?: false,
-                            folderId = folderId,
-                            orderIndex = (data["orderIndex"] as? Number)?.toInt() ?: 0,
-                            pins = data["pins"] as? String ?: "",
-                            id = (data["id"] as? Number)?.toInt() ?: 0
-                        )
-                    }
-                    if (notes.isNotEmpty()) {
-                        noteDao.insertNotes(notes)
-                    }
-                }) failedSteps.add("Notes")
+                            NoteEntity(
+                                title = data["title"] as? String ?: "",
+                                content = data["content"] as? String ?: "",
+                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                                pinned = data["pinned"] as? Boolean ?: false,
+                                folderId = folderId,
+                                orderIndex = (data["orderIndex"] as? Number)?.toInt() ?: 0,
+                                pins = data["pins"] as? String ?: "",
+                                id = (data["id"] as? Number)?.toInt() ?: 0
+                            )
+                        }
+                        if (notes.isNotEmpty()) {
+                            noteDao.insertNotes(notes)
+                        }
+                    }) failedSteps.add("Notes")
 
                 if (!runLogged("Diary") {
-                    val snap = base.collection("diary").get().await()
-                    val entries = snap.documents.mapNotNull { d ->
-                        val data = d.data ?: return@mapNotNull null
-                        val mood = when (val mv = data["mood"]) {
-                            is Number -> com.mhss.app.domain.model.Mood.values().getOrNull(mv.toInt())
-                            is String -> runCatching { com.mhss.app.domain.model.Mood.valueOf(mv) }.getOrNull()
-                            else -> null
-                        } ?: com.mhss.app.domain.model.Mood.values().first()
-                        DiaryEntryEntity(
-                            title = data["title"] as? String ?: "",
-                            content = data["content"] as? String ?: "",
-                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                            mood = mood,
-                            id = (data["id"] as? Number)?.toInt() ?: 0
-                        )
-                    }
-                    if (entries.isNotEmpty()) diaryDao.insertEntries(entries)
-                }) failedSteps.add("Diary")
+                        val snap = base.collection("diary").get().await()
+                        val entries = snap.documents.mapNotNull { d ->
+                            val data = d.data ?: return@mapNotNull null
+                            val mood = when (val mv = data["mood"]) {
+                                is Number -> com.mhss.app.domain.model.Mood.values().getOrNull(mv.toInt())
+                                is String -> runCatching { com.mhss.app.domain.model.Mood.valueOf(mv) }.getOrNull()
+                                else -> null
+                            } ?: com.mhss.app.domain.model.Mood.values().first()
+                            DiaryEntryEntity(
+                                title = data["title"] as? String ?: "",
+                                content = data["content"] as? String ?: "",
+                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                                mood = mood,
+                                id = (data["id"] as? Number)?.toInt() ?: 0
+                            )
+                        }
+                        if (entries.isNotEmpty()) diaryDao.insertEntries(entries)
+                    }) failedSteps.add("Diary")
 
                 if (!runLogged("Tasks") {
-                    val snap = base.collection("tasks").get().await()
-                    val tasks = snap.documents.mapNotNull { d ->
-                        val data = d.data ?: return@mapNotNull null
-                        TaskEntity(
-                            id = (data["id"] as? Number)?.toInt() ?: 0,
-                            title = data["title"] as? String ?: "",
-                            description = data["description"] as? String ?: "",
-                            isCompleted = data["isCompleted"] as? Boolean ?: false,
-                            priority = (data["priority"] as? Number)?.toInt() ?: 0,
-                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                            subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
-                                val map = raw as? Map<*, *> ?: return@mapNotNull null
-                                val idValue = map["id"] ?: return@mapNotNull null
-                                val uuid = when (idValue) {
-                                    is String -> try {
-                                        Uuid.fromString(idValue)
-                                    } catch (_: Exception) {
-                                        return@mapNotNull null
+                        val snap = base.collection("tasks").get().await()
+                        val tasks = snap.documents.mapNotNull { d ->
+                            val data = d.data ?: return@mapNotNull null
+                            TaskEntity(
+                                id = (data["id"] as? Number)?.toInt() ?: 0,
+                                title = data["title"] as? String ?: "",
+                                description = data["description"] as? String ?: "",
+                                isCompleted = data["isCompleted"] as? Boolean ?: false,
+                                priority = (data["priority"] as? Number)?.toInt() ?: 0,
+                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                                subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
+                                    val map = raw as? Map<*, *> ?: return@mapNotNull null
+                                    val idValue = map["id"] ?: return@mapNotNull null
+                                    val uuid = when (idValue) {
+                                        is String -> try {
+                                            Uuid.fromString(idValue)
+                                        } catch (_: Exception) {
+                                            return@mapNotNull null
+                                        }
+                                        else -> return@mapNotNull null
                                     }
-                                    else -> return@mapNotNull null
-                                }
-                                com.mhss.app.domain.model.SubTask(
-                                    id = uuid,
-                                    title = map["title"] as? String ?: "",
-                                    isCompleted = map["isCompleted"] as? Boolean ?: false
-                                )
-                            } ?: emptyList(),
-                            dueDate = (data["dueDate"] as? Number)?.toLong() ?: 0L,
-                            recurring = data["recurring"] as? Boolean ?: false,
-                            frequency = (data["frequency"] as? Number)?.toInt() ?: 0,
-                            frequencyAmount = (data["frequencyAmount"] as? Number)?.toInt() ?: 0
-                        )
-                    }
-                    if (tasks.isNotEmpty()) taskDao.insertTasks(tasks)
-                }) failedSteps.add("Tasks")
+                                    com.mhss.app.domain.model.SubTask(
+                                        id = uuid,
+                                        title = map["title"] as? String ?: "",
+                                        isCompleted = map["isCompleted"] as? Boolean ?: false
+                                    )
+                                } ?: emptyList(),
+                                dueDate = (data["dueDate"] as? Number)?.toLong() ?: 0L,
+                                recurring = data["recurring"] as? Boolean ?: false,
+                                frequency = (data["frequency"] as? Number)?.toInt() ?: 0,
+                                frequencyAmount = (data["frequencyAmount"] as? Number)?.toInt() ?: 0
+                            )
+                        }
+                        if (tasks.isNotEmpty()) taskDao.insertTasks(tasks)
+                    }) failedSteps.add("Tasks")
 
                 if (!runLogged("Bookmarks") {
-                    val snap = base.collection("bookmarks").get().await()
-                    val bookmarks = snap.documents.mapNotNull { d ->
-                        val data = d.data ?: return@mapNotNull null
-                        BookmarkEntity(
-                            url = data["url"] as? String ?: "",
-                            title = data["title"] as? String ?: "",
-                            description = data["description"] as? String ?: "",
-                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                            id = (data["id"] as? Number)?.toInt() ?: 0
-                        )
-                    }
-                    if (bookmarks.isNotEmpty()) bookmarkDao.insertBookmarks(bookmarks)
-                }) failedSteps.add("Bookmarks")
+                        val snap = base.collection("bookmarks").get().await()
+                        val bookmarks = snap.documents.mapNotNull { d ->
+                            val data = d.data ?: return@mapNotNull null
+                            BookmarkEntity(
+                                url = data["url"] as? String ?: "",
+                                title = data["title"] as? String ?: "",
+                                description = data["description"] as? String ?: "",
+                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                                id = (data["id"] as? Number)?.toInt() ?: 0
+                            )
+                        }
+                        if (bookmarks.isNotEmpty()) bookmarkDao.insertBookmarks(bookmarks)
+                    }) failedSteps.add("Bookmarks")
 
                 runLogged("Meta") { touchMeta() }
             }
@@ -479,11 +483,11 @@ class AuthViewModel(
     }
 
     private fun userRef(uid: String): DocumentReference =
-        firestore.collection("users").document(uid)
+        UserDataPaths.userRoot(firestore, uid)
 
     private suspend fun touchMeta() {
         val uid = auth.currentUser?.uid ?: return
-        val metaDoc = userRef(uid).collection("meta").document("sync")
+        val metaDoc = UserDataPaths.metaCollection(firestore, uid).document("sync")
         val meta = hashMapOf(
             "device" to Build.MODEL,
             "lastSync" to FieldValue.serverTimestamp()
