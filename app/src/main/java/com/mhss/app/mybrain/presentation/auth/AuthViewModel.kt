@@ -1,14 +1,18 @@
 package com.mhss.app.mybrain.presentation.auth
 
+import android.app.Application
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.benasher44.uuid.Uuid
 import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.mhss.app.database.MyBrainDatabase
 import com.mhss.app.database.dao.BookmarkDao
 import com.mhss.app.database.dao.DiaryDao
 import com.mhss.app.database.dao.NoteDao
@@ -18,22 +22,19 @@ import com.mhss.app.database.entity.DiaryEntryEntity
 import com.mhss.app.database.entity.NoteEntity
 import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
+import com.mhss.app.mybrain.InternetDetector
+import com.mhss.app.util.ApprovedUserConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.withContext
 import org.koin.android.annotation.KoinViewModel
-import kotlinx.coroutines.flow.asStateFlow
-import com.mhss.app.database.MyBrainDatabase
-import com.mhss.app.mybrain.InternetDetector
-import android.app.Application
-import android.util.Log
-import com.benasher44.uuid.Uuid
+import kotlin.coroutines.resumeWithException
 
 private const val TAG = "SYNC"
 
@@ -50,10 +51,7 @@ class AuthViewModel(
 ) : ViewModel() {
 
     private var syncPaused: Boolean = false
-
-    private val pendingSyncQueue =
-        ArrayDeque<suspend () -> Unit>()
-
+    private val pendingSyncQueue = ArrayDeque<suspend () -> Unit>()
     private val queueFileName = "pending_sync_queue.flag"
 
     private fun persistQueueFlag() {
@@ -61,6 +59,7 @@ class AuthViewModel(
         file.writeText("pending")
         Log.d(TAG, "persistQueueFlag: kö-flagga sparad (pending=${pendingSyncQueue.size})")
     }
+
     private fun clearQueueFlag() {
         val file = java.io.File(app.filesDir, queueFileName)
         if (file.exists()) {
@@ -68,10 +67,12 @@ class AuthViewModel(
             Log.d(TAG, "clearQueueFlag: kö-flagga borttagen")
         }
     }
+
     private fun hasPersistedQueue(): Boolean {
         val file = java.io.File(app.filesDir, queueFileName)
         return file.exists()
     }
+
     private val _user = MutableStateFlow<FirebaseUser?>(null)
     val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
 
@@ -84,21 +85,14 @@ class AuthViewModel(
         val currentUser = firebaseAuth.currentUser
         val isNowLoggedIn = currentUser != null
 
-        Log.d(
-            TAG,
-            "authListener: isNowLoggedIn=$isNowLoggedIn, wasPreviouslyLoggedIn=$wasPreviouslyLoggedIn, uid=${currentUser?.uid}"
-        )
-
+        Log.d(TAG, "authListener: isNowLoggedIn=$isNowLoggedIn, wasPreviouslyLoggedIn=$wasPreviouslyLoggedIn, uid=${currentUser?.uid}")
         _user.value = currentUser
 
-        // Reagera endast vid tillståndsförändring
         if (isNowLoggedIn != wasPreviouslyLoggedIn) {
             if (isNowLoggedIn) {
                 _authMessage.value = "Du är nu inloggad – din data synkas till enheten"
                 Log.d(TAG, "authListener: ny inloggning -> startar downloadAllFromCloud()")
-                viewModelScope.launch {
-                    downloadAllFromCloud()
-                }
+                viewModelScope.launch { downloadAllFromCloud() }
             } else {
                 _authMessage.value = "Du är nu utloggad"
                 Log.d(TAG, "authListener: utloggad")
@@ -109,7 +103,6 @@ class AuthViewModel(
     }
 
     init {
-        // Sätt korrekt initialt tillstånd innan vi lyssnar
         wasPreviouslyLoggedIn = auth.currentUser != null
         _user.value = auth.currentUser
         Log.d(TAG, "init: inloggad=${wasPreviouslyLoggedIn}, uid=${auth.currentUser?.uid}")
@@ -126,44 +119,35 @@ class AuthViewModel(
         super.onCleared()
     }
 
-    // ────────────────────────────────────────────────
-    //    Inloggning / Skapa konto
-    // ────────────────────────────────────────────────
     fun signIn(email: String, password: String, onError: (String) -> Unit) {
-        Log.d(TAG, "signIn: försöker logga in")
-        auth.signInWithEmailAndPassword(email, password)
+        val normalizedEmail = email.trim()
+        if (!ApprovedUserConfig.isApprovedEmail(normalizedEmail)) {
+            val msg = "Inloggning avvisad: endast godkända e-postadresser får användas."
+            Log.w(TAG, "signIn: access denied for email=$normalizedEmail")
+            _authMessage.value = msg
+            onError(msg)
+            return
+        }
+
+        Log.d(TAG, "signIn: försöker logga in för godkänd e-post=${normalizedEmail}")
+        auth.signInWithEmailAndPassword(normalizedEmail, password)
             .addOnSuccessListener { result ->
                 Log.d(TAG, "signIn: OK uid=${result.user?.uid}")
                 _user.value = result.user
                 _authMessage.value = "Du är nu inloggad – din data synkas till enheten"
-                // Nedladdning hanteras av authListener
             }
             .addOnFailureListener { signInError ->
                 Log.w(TAG, "signIn: inloggning misslyckades: ${signInError.message}")
-                // Försök skapa nytt konto
-                auth.createUserWithEmailAndPassword(email, password)
-                    .addOnSuccessListener { result ->
-                        Log.w(TAG, "signIn: NYTT KONTO skapades uid=${result.user?.uid}")
-                        _user.value = result.user
-                        _authMessage.value = "Konto skapat och du är nu inloggad"
-                    }
-                    .addOnFailureListener { exception ->
-                        Log.e(TAG, "signIn: skapa konto misslyckades: ${exception.message}")
-                        _authMessage.value = "Inloggning misslyckades – fel användarnamn eller lösenord"
-                        onError("Authentication failed: ${exception.localizedMessage}")
-                    }
+                _authMessage.value = "Inloggning misslyckades – endast godkända konton får logga in"
+                onError("Authentication failed: ${signInError.localizedMessage}")
             }
     }
 
     fun signOut() {
         Log.d(TAG, "signOut()")
         auth.signOut()
-        // Resten (null:a user + meddelande) hanteras av authListener
     }
 
-    // ────────────────────────────────────────────────
-    //    Hämta allt från molnet (rensar lokalt först)
-    // ────────────────────────────────────────────────
     fun resyncAllFromCloud() {
         val user = auth.currentUser ?: run {
             Log.w(TAG, "resyncAllFromCloud: ingen inloggad användare, avbryter")
@@ -186,9 +170,6 @@ class AuthViewModel(
         }
     }
 
-    // ────────────────────────────────────────────────
-    //    Manuell synkronisering uppåt (upload)
-    // ────────────────────────────────────────────────
     fun syncNow(onDone: () -> Unit = {}) {
         val user = auth.currentUser ?: run {
             Log.w(TAG, "syncNow: ingen inloggad användare")
@@ -201,7 +182,6 @@ class AuthViewModel(
         Log.d(TAG, "syncNow() starting for uid=${user.uid}")
 
         viewModelScope.launch {
-
             if (!InternetDetector.hasInternet(app)) {
                 Log.w(TAG, "syncNow: inget internet")
                 _syncResult.value = false
@@ -219,49 +199,23 @@ class AuthViewModel(
                     val diary = diaryDao.getAllEntries().first()
                     val bookmarks = bookmarkDao.getAllBookmarks().first()
 
-                    Log.d(
-                        TAG,
-                        "syncNow: lokalt -> notes=${notes.size}, folders=${noteFolders.size}, " +
-                                "tasks=${tasks.size}, diary=${diary.size}, bookmarks=${bookmarks.size}"
-                    )
-                    Log.d(
-                        TAG,
-                        "syncNow: id=0 (hoppas över) -> notes=${notes.count { it.id == 0 }}, " +
-                                "folders=${noteFolders.count { it.id == 0 }}"
-                    )
-
                     val userRef = userRef(user.uid)
                     val batch = firestore.batch()
 
                     notes.filter { it.id != 0 }.forEach { n ->
-                        batch.set(
-                            userRef.collection("notes").document(n.id.toString()),
-                            n.toNoteMap()
-                        )
+                        batch.set(userRef.collection("notes").document(n.id.toString()), n.toNoteMap())
                     }
                     noteFolders.filter { it.id != 0 }.forEach { f ->
-                        batch.set(
-                            userRef.collection("folders").document(f.id.toString()),
-                            f.toFolderMap()
-                        )
+                        batch.set(userRef.collection("folders").document(f.id.toString()), f.toFolderMap())
                     }
                     tasks.filter { it.id != 0 }.forEach { t ->
-                        batch.set(
-                            userRef.collection("tasks").document(t.id.toString()),
-                            t.toTaskMap()
-                        )
+                        batch.set(userRef.collection("tasks").document(t.id.toString()), t.toTaskMap())
                     }
                     diary.filter { it.id != 0 }.forEach { d ->
-                        batch.set(
-                            userRef.collection("diary").document(d.id.toString()),
-                            d.toDiaryMap()
-                        )
+                        batch.set(userRef.collection("diary").document(d.id.toString()), d.toDiaryMap())
                     }
                     bookmarks.filter { it.id != 0 }.forEach { b ->
-                        batch.set(
-                            userRef.collection("bookmarks").document(b.id.toString()),
-                            b.toBookmarkMap()
-                        )
+                        batch.set(userRef.collection("bookmarks").document(b.id.toString()), b.toBookmarkMap())
                     }
 
                     val meta = hashMapOf(
@@ -270,7 +224,6 @@ class AuthViewModel(
                     )
                     batch.set(userRef.collection("meta").document("sync"), meta)
 
-                    Log.d(TAG, "syncNow: skickar batch.commit()")
                     batch.commit().await()
                 }
 
@@ -286,10 +239,6 @@ class AuthViewModel(
         }
     }
 
-
-    // ────────────────────────────────────────────────
-    //    Kö för misslyckade enskilda synkningar
-    // ────────────────────────────────────────────────
     private suspend fun resumePendingSyncIfAny() {
         if (syncPaused) {
             Log.d(TAG, "resumePendingSyncIfAny: syncPaused=true, hoppar över")
@@ -314,14 +263,6 @@ class AuthViewModel(
         clearQueueFlag()
     }
 
-    // ────────────────────────────────────────────────
-    //    Nedladdning från molnet (anropas automatiskt vid ny inloggning)
-    // ────────────────────────────────────────────────
-
-    /**
-     * Kör ett nedladdningssteg. Loggar start, slut och fel.
-     * Returnerar true om steget lyckades, annars false.
-     */
     private suspend fun runLogged(name: String, block: suspend () -> Unit): Boolean {
         return try {
             Log.d(TAG, "[$name] START")
@@ -342,6 +283,7 @@ class AuthViewModel(
             return
         }
 
+        val base = firestore.collection("users").document(user.uid)
         Log.d(TAG, "downloadAllFromCloud: ENTER for uid=${user.uid}")
         _syncInProgress.value = true
 
@@ -349,189 +291,120 @@ class AuthViewModel(
 
         try {
             withContext(Dispatchers.IO) {
-                val base = firestore.collection("workspace").document("shared")
-
-                // ── Folders ─────────────────────────────
                 if (!runLogged("Folders") {
-                        val snap = base.collection("folders").get().await()
-                        Log.d(TAG, "[Folders] dokument i molnet: ${snap.size()}")
-
-                        var skipped = 0
-                        val folders = snap.documents.mapNotNull { d ->
-                            val data = d.data
-                            if (data == null) {
-                                skipped++
-                                Log.w(TAG, "[Folders] dokument ${d.id} saknar data, hoppas över")
-                                return@mapNotNull null
-                            }
-                            NoteFolderEntity(
-                                id = (data["id"] as? Number)?.toInt() ?: 0,
-                                name = data["name"] as? String ?: "",
-                                parentId = (data["parentId"] as? Number)?.toInt()
-                            )
-                        }
-                        Log.d(
-                            TAG,
-                            "[Folders] tolkade=${folders.size}, hoppade över=$skipped, " +
-                                    "med id=0: ${folders.count { it.id == 0 }}"
+                    val snap = base.collection("folders").get().await()
+                    val folders = snap.documents.mapNotNull { d ->
+                        val data = d.data ?: return@mapNotNull null
+                        NoteFolderEntity(
+                            id = (data["id"] as? Number)?.toInt() ?: 0,
+                            name = data["name"] as? String ?: "",
+                            parentId = (data["parentId"] as? Number)?.toInt()
                         )
-                        if (folders.isNotEmpty()) {
-                            val rowIds = noteDao.insertNoteFolders(folders)
-                            val ignored = rowIds.count { it == -1L }
-                            Log.d(TAG, "[Folders] insatta=${rowIds.size - ignored}, ignorerade (-1)=$ignored")
-                        }
                     }
-                ) failedSteps.add("Folders")
+                    if (folders.isNotEmpty()) {
+                        noteDao.insertNoteFolders(folders)
+                    }
+                }) failedSteps.add("Folders")
 
-                // ── Notes ───────────────────────────────
                 if (!runLogged("Notes") {
-                        val snap = base.collection("notes").get().await()
-                        Log.d(TAG, "[Notes] dokument i molnet: ${snap.size()}")
+                    val snap = base.collection("notes").get().await()
+                    val validFolderIds = noteDao.getAllNoteFolders().first().map { it.id }.toSet()
+                    val notes = snap.documents.mapNotNull { d ->
+                        val data = d.data ?: return@mapNotNull null
+                        val rawFolderId = (data["folderId"] as? Number)?.toInt()
+                        val folderId = rawFolderId?.takeIf { it in validFolderIds }
 
-                        // Anteckningar får bara peka på mappar som finns lokalt (FK-skydd)
-                        val validFolderIds = noteDao.getAllNoteFolders().first().map { it.id }.toSet()
-                        Log.d(TAG, "[Notes] giltiga mapp-id lokalt: ${validFolderIds.size}")
-
-                        var skipped = 0
-                        var orphaned = 0
-                        val orphanedFolderIds = mutableSetOf<Int>()
-
-                        val notes = snap.documents.mapNotNull { d ->
-                            val data = d.data
-                            if (data == null) {
-                                skipped++
-                                Log.w(TAG, "[Notes] dokument ${d.id} saknar data, hoppas över")
-                                return@mapNotNull null
-                            }
-
-                            val rawFolderId = (data["folderId"] as? Number)?.toInt()
-                            val folderId = rawFolderId?.takeIf { it in validFolderIds }
-                            if (rawFolderId != null && folderId == null) {
-                                orphaned++
-                                orphanedFolderIds.add(rawFolderId)
-                                Log.w(
-                                    TAG,
-                                    "[Notes] anteckning ${d.id} pekar på mapp $rawFolderId som INTE finns -> läggs utan mapp"
-                                )
-                            }
-
-                            NoteEntity(
-                                title = data["title"] as? String ?: "",
-                                content = data["content"] as? String ?: "",
-                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                                pinned = data["pinned"] as? Boolean ?: false,
-                                folderId = folderId,
-                                orderIndex = (data["orderIndex"] as? Number)?.toInt() ?: 0,
-                                pins = data["pins"] as? String ?: "",
-                                id = (data["id"] as? Number)?.toInt() ?: 0
-                            )
-                        }
-
-                        Log.d(
-                            TAG,
-                            "[Notes] tolkade=${notes.size}, hoppade över=$skipped, " +
-                                    "utan giltig mapp=$orphaned (saknade mapp-id: $orphanedFolderIds), " +
-                                    "med id=0: ${notes.count { it.id == 0 }}"
+                        NoteEntity(
+                            title = data["title"] as? String ?: "",
+                            content = data["content"] as? String ?: "",
+                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                            pinned = data["pinned"] as? Boolean ?: false,
+                            folderId = folderId,
+                            orderIndex = (data["orderIndex"] as? Number)?.toInt() ?: 0,
+                            pins = data["pins"] as? String ?: "",
+                            id = (data["id"] as? Number)?.toInt() ?: 0
                         )
-
-                        if (notes.isNotEmpty()) {
-                            noteDao.insertNotes(notes)
-                            val afterCount = noteDao.getAllNotes().size
-                            Log.d(TAG, "[Notes] efter insert: anteckningar i lokala databasen=$afterCount")
-                        }
                     }
-                ) failedSteps.add("Notes")
+                    if (notes.isNotEmpty()) {
+                        noteDao.insertNotes(notes)
+                    }
+                }) failedSteps.add("Notes")
 
-                // ── Diary ───────────────────────────────
                 if (!runLogged("Diary") {
-                        val snap = base.collection("diary").get().await()
-                        Log.d(TAG, "[Diary] dokument i molnet: ${snap.size()}")
-
-                        val entries = snap.documents.mapNotNull { d ->
-                            val data = d.data ?: return@mapNotNull null
-                            val mood = when (val mv = data["mood"]) {
-                                is Number -> com.mhss.app.domain.model.Mood.values().getOrNull(mv.toInt())
-                                is String -> runCatching { com.mhss.app.domain.model.Mood.valueOf(mv) }.getOrNull()
-                                else -> null
-                            } ?: com.mhss.app.domain.model.Mood.values().first()
-                            DiaryEntryEntity(
-                                title = data["title"] as? String ?: "",
-                                content = data["content"] as? String ?: "",
-                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                                mood = mood,
-                                id = (data["id"] as? Number)?.toInt() ?: 0
-                            )
-                        }
-                        Log.d(TAG, "[Diary] tolkade=${entries.size}")
-                        if (entries.isNotEmpty()) diaryDao.insertEntries(entries)
+                    val snap = base.collection("diary").get().await()
+                    val entries = snap.documents.mapNotNull { d ->
+                        val data = d.data ?: return@mapNotNull null
+                        val mood = when (val mv = data["mood"]) {
+                            is Number -> com.mhss.app.domain.model.Mood.values().getOrNull(mv.toInt())
+                            is String -> runCatching { com.mhss.app.domain.model.Mood.valueOf(mv) }.getOrNull()
+                            else -> null
+                        } ?: com.mhss.app.domain.model.Mood.values().first()
+                        DiaryEntryEntity(
+                            title = data["title"] as? String ?: "",
+                            content = data["content"] as? String ?: "",
+                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                            mood = mood,
+                            id = (data["id"] as? Number)?.toInt() ?: 0
+                        )
                     }
-                ) failedSteps.add("Diary")
+                    if (entries.isNotEmpty()) diaryDao.insertEntries(entries)
+                }) failedSteps.add("Diary")
 
-                // ── Tasks ───────────────────────────────
                 if (!runLogged("Tasks") {
-                        val snap = base.collection("tasks").get().await()
-                        Log.d(TAG, "[Tasks] dokument i molnet: ${snap.size()}")
-
-                        val tasks = snap.documents.mapNotNull { d ->
-                            val data = d.data ?: return@mapNotNull null
-                            TaskEntity(
-                                id = (data["id"] as? Number)?.toInt() ?: 0,
-                                title = data["title"] as? String ?: "",
-                                description = data["description"] as? String ?: "",
-                                isCompleted = data["isCompleted"] as? Boolean ?: false,
-                                priority = (data["priority"] as? Number)?.toInt() ?: 0,
-                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                                subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
-                                    val map = raw as? Map<*, *> ?: return@mapNotNull null
-                                    val idValue = map["id"] ?: return@mapNotNull null
-                                    val uuid = when (idValue) {
-                                        is String -> try {
-                                            com.benasher44.uuid.Uuid.fromString(idValue)
-                                        } catch (e: Exception) {
-                                            return@mapNotNull null
-                                        }
-                                        else -> return@mapNotNull null
+                    val snap = base.collection("tasks").get().await()
+                    val tasks = snap.documents.mapNotNull { d ->
+                        val data = d.data ?: return@mapNotNull null
+                        TaskEntity(
+                            id = (data["id"] as? Number)?.toInt() ?: 0,
+                            title = data["title"] as? String ?: "",
+                            description = data["description"] as? String ?: "",
+                            isCompleted = data["isCompleted"] as? Boolean ?: false,
+                            priority = (data["priority"] as? Number)?.toInt() ?: 0,
+                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                            subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
+                                val map = raw as? Map<*, *> ?: return@mapNotNull null
+                                val idValue = map["id"] ?: return@mapNotNull null
+                                val uuid = when (idValue) {
+                                    is String -> try {
+                                        Uuid.fromString(idValue)
+                                    } catch (_: Exception) {
+                                        return@mapNotNull null
                                     }
-                                    com.mhss.app.domain.model.SubTask(
-                                        id = uuid,
-                                        title = map["title"] as? String ?: "",
-                                        isCompleted = map["isCompleted"] as? Boolean ?: false
-                                    )
-                                } ?: emptyList(),
-                                dueDate = (data["dueDate"] as? Number)?.toLong() ?: 0L,
-                                recurring = data["recurring"] as? Boolean ?: false,
-                                frequency = (data["frequency"] as? Number)?.toInt() ?: 0,
-                                frequencyAmount = (data["frequencyAmount"] as? Number)?.toInt() ?: 0
-                            )
-                        }
-                        Log.d(TAG, "[Tasks] tolkade=${tasks.size}")
-                        if (tasks.isNotEmpty()) taskDao.insertTasks(tasks)
+                                    else -> return@mapNotNull null
+                                }
+                                com.mhss.app.domain.model.SubTask(
+                                    id = uuid,
+                                    title = map["title"] as? String ?: "",
+                                    isCompleted = map["isCompleted"] as? Boolean ?: false
+                                )
+                            } ?: emptyList(),
+                            dueDate = (data["dueDate"] as? Number)?.toLong() ?: 0L,
+                            recurring = data["recurring"] as? Boolean ?: false,
+                            frequency = (data["frequency"] as? Number)?.toInt() ?: 0,
+                            frequencyAmount = (data["frequencyAmount"] as? Number)?.toInt() ?: 0
+                        )
                     }
-                ) failedSteps.add("Tasks")
+                    if (tasks.isNotEmpty()) taskDao.insertTasks(tasks)
+                }) failedSteps.add("Tasks")
 
-                // ── Bookmarks ───────────────────────────
                 if (!runLogged("Bookmarks") {
-                        val snap = base.collection("bookmarks").get().await()
-                        Log.d(TAG, "[Bookmarks] dokument i molnet: ${snap.size()}")
-
-                        val bookmarks = snap.documents.mapNotNull { d ->
-                            val data = d.data ?: return@mapNotNull null
-                            BookmarkEntity(
-                                url = data["url"] as? String ?: "",
-                                title = data["title"] as? String ?: "",
-                                description = data["description"] as? String ?: "",
-                                createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
-                                updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
-                                id = (data["id"] as? Number)?.toInt() ?: 0
-                            )
-                        }
-                        Log.d(TAG, "[Bookmarks] tolkade=${bookmarks.size}")
-                        if (bookmarks.isNotEmpty()) bookmarkDao.insertBookmarks(bookmarks)
+                    val snap = base.collection("bookmarks").get().await()
+                    val bookmarks = snap.documents.mapNotNull { d ->
+                        val data = d.data ?: return@mapNotNull null
+                        BookmarkEntity(
+                            url = data["url"] as? String ?: "",
+                            title = data["title"] as? String ?: "",
+                            description = data["description"] as? String ?: "",
+                            createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
+                            updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                            id = (data["id"] as? Number)?.toInt() ?: 0
+                        )
                     }
-                ) failedSteps.add("Bookmarks")
+                    if (bookmarks.isNotEmpty()) bookmarkDao.insertBookmarks(bookmarks)
+                }) failedSteps.add("Bookmarks")
 
                 runLogged("Meta") { touchMeta() }
             }
@@ -551,9 +424,6 @@ class AuthViewModel(
         }
     }
 
-    // ────────────────────────────────────────────────
-    //    Automatisk enskild synkronisering vid ändring
-    // ────────────────────────────────────────────────
     fun syncNote(note: NoteEntity) {
         val user = auth.currentUser ?: return
         if (note.id == 0) {
@@ -564,17 +434,13 @@ class AuthViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             enqueueOrRun {
                 Log.d(TAG, "syncNote: skickar anteckning id=${note.id}")
-                userRef(user.uid)
-                    .collection("notes")
-                    .document(note.id.toString())
-                    .set(note.toNoteMap())
-                    .await()
-
+                userRef(user.uid).collection("notes").document(note.id.toString()).set(note.toNoteMap()).await()
                 touchMeta()
                 Log.d(TAG, "syncNote: OK id=${note.id}")
             }
         }
     }
+
     fun syncBookmark(bookmark: BookmarkEntity) {
         val user = auth.currentUser ?: return
         if (bookmark.id == 0) {
@@ -585,21 +451,13 @@ class AuthViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             enqueueOrRun {
                 Log.d(TAG, "syncBookmark: skickar bokmärke id=${bookmark.id}")
-                userRef(user.uid)
-                    .collection("bookmarks")
-                    .document(bookmark.id.toString())
-                    .set(bookmark.toBookmarkMap())
-                    .await()
-
+                userRef(user.uid).collection("bookmarks").document(bookmark.id.toString()).set(bookmark.toBookmarkMap()).await()
                 touchMeta()
                 Log.d(TAG, "syncBookmark: OK id=${bookmark.id}")
             }
         }
     }
 
-    // ────────────────────────────────────────────────
-    //    Hjälpfunktioner
-    // ────────────────────────────────────────────────
     private suspend fun enqueueOrRun(block: suspend () -> Unit) {
         if (syncPaused) {
             Log.w(TAG, "enqueueOrRun: syncPaused=true, köar jobb (kö=${pendingSyncQueue.size + 1})")
@@ -621,7 +479,7 @@ class AuthViewModel(
     }
 
     private fun userRef(uid: String): DocumentReference =
-        firestore.collection("workspace").document("shared")
+        firestore.collection("users").document(uid)
 
     private suspend fun touchMeta() {
         val uid = auth.currentUser?.uid ?: return
@@ -705,7 +563,6 @@ class AuthViewModel(
     fun clearSyncResult() {
         _syncResult.value = null
     }
-
 
     private val _syncInProgress = MutableStateFlow(false)
     val syncInProgress: StateFlow<Boolean> = _syncInProgress.asStateFlow()
