@@ -8,6 +8,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -15,14 +17,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mhss.app.ui.R
-import com.mhss.app.ui.components.common.GlassSurface
 import com.mhss.app.ui.theme.Blue
 import com.mhss.app.ui.theme.MyBrainTheme
 import kotlinx.coroutines.delay
@@ -34,18 +34,10 @@ fun SpaceCard(
     image: Int,
     backgroundColor: Color,
     isPulsing: Boolean = false,
+    modifier: Modifier = Modifier, // Bevezetve a külső elrendezés fogadására
     onClick: () -> Unit = {}
 ) {
     val shape = RoundedCornerShape(15.dp)
-    val boostedColor = backgroundColor.boost()
-
-    val gradient = Brush.verticalGradient(
-        colors = listOf(
-            boostedColor.copy(alpha = 0.55f),
-            boostedColor.copy(alpha = 0.5f)
-        )
-    )
-
     var heartbeatPhase by remember { mutableStateOf(false) }
 
     LaunchedEffect(isPulsing) {
@@ -69,18 +61,20 @@ fun SpaceCard(
         label = "heartbeat"
     )
 
-    GlassSurface(
+    // GlassSurface lecserélve standard M3 Card-ra árnyékok nélkül,
+    // így megszűnik a koszos/fátyolos hatás.
+    Card(
         shape = shape,
-        elevation = 0.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 84.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor
+        ),
+        elevation = CardDefaults.cardElevation(0.dp), // Teljesen kikapcsoljuk a sötétítő tint-réteget
+        modifier = modifier
             .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .background(gradient)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -107,7 +101,8 @@ fun SpaceCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White
+                    // A szöveg színe dinamikusan követi a témát (világos/sötét mód) a fix fehér helyett
+                    color = MaterialTheme.colorScheme.onBackground
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -115,19 +110,13 @@ fun SpaceCard(
                 Text(
                     text = stringResource(subtitleRes),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.60f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                     maxLines = 2
                 )
             }
         }
     }
 }
-
-fun Color.boost(): Color = copy(
-    red = (red * 1.1f).coerceAtMost(1f),
-    green = (green * 1.1f).coerceAtMost(1f),
-    blue = (blue * 1.1f).coerceAtMost(1f)
-)
 
 @Preview(showBackground = true)
 @Composable
@@ -141,3 +130,26 @@ fun SpaceCardPreview() {
         )
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

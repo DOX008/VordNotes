@@ -2,10 +2,15 @@ package com.mhss.app.mybrain.presentation.main
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -26,7 +31,7 @@ import com.mhss.app.ui.theme.MyBrainTheme
 fun SpacesScreen(
     navController: NavHostController
 ) {
-    // Samma kortfärg som NoteCard, TaskCard och NotesScreen
+    // Ugyanaz a tiszta kártyaszín, mint a többi képernyőn
     val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
 
     Scaffold(
@@ -37,36 +42,53 @@ fun SpacesScreen(
         }
     ) { paddingValues ->
 
-        LazyColumn(
-            modifier = Modifier.padding(paddingValues),
-            contentPadding = PaddingValues(
-                top = 24.dp,
-                bottom = 32.dp,
-                start = 16.dp,
-                end = 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        // BoxWithConstraints segítségével leolvassuk a képernyő valós magasságát
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
         ) {
-            items(spaces) { (title, subtitle, image, screen) ->
-                SpaceCard(
-                    title = stringResource(title),
-                    subtitleRes = subtitle,
-                    image = image,
-                    backgroundColor = cardColor,
-                    isPulsing = title == R.string.diary,
-                    onClick = { navController.navigate(screen) }
-                )
-            }
+            val gap = 12.dp
+            // Kiszámítjuk a kártyák magasságát: a teljes magasságból levonjuk a margókat,
+            // majd elosztjuk a 6 gomb között, de minimum 84.dp méretet biztosítunk.
+            val calculatedCardHeight = ((maxHeight - 56.dp - (gap * 5)) / 6).coerceAtLeast(84.dp)
 
-            item {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()) // Ha a kijelző extrém kicsi, görgethetővé válik
+                    .padding(horizontal = 16.dp)
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                spaces.forEach { (title, subtitle, image, screen) ->
+                    SpaceCard(
+                        title = stringResource(title),
+                        subtitleRes = subtitle,
+                        image = image,
+                        backgroundColor = cardColor,
+                        isPulsing = title == R.string.diary,
+                        onClick = { navController.navigate(screen) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(calculatedCardHeight) // Átadjuk a dinamikus magasságot
+                    )
+                    Spacer(modifier = Modifier.height(gap))
+                }
+
                 SpaceCard(
                     title = stringResource(R.string.assistant),
                     subtitleRes = R.string.assistant_subtitle,
                     image = R.drawable.ai_chat_img,
                     backgroundColor = cardColor,
                     isPulsing = false,
-                    onClick = { navController.navigate(Screen.AssistantScreen) }
+                    onClick = { navController.navigate(Screen.AssistantScreen) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(calculatedCardHeight) // Az asszisztens gomb is dinamikus magasságot kap
                 )
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }
