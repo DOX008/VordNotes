@@ -94,6 +94,8 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$camerax")
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
+    // ListenableFuture (ProcessCameraProvider.getInstance(...)) must be on the compile classpath
+    implementation("com.google.guava:guava:33.2.1-android")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     implementation("androidx.activity:activity-ktx:1.9.3")
 }
