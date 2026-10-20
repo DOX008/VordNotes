@@ -49,7 +49,6 @@ fun SpaceCardGrid(
     image: Int,
     backgroundColor: Color,
     modifier: Modifier = Modifier,
-    textColor: Color = Color.White,
     isPulsing: Boolean = false,
     cardShape: CornerBasedShape = RoundedCornerShape(28.dp),
     imageAlignment: Alignment = Alignment.TopStart,
@@ -81,6 +80,10 @@ fun SpaceCardGrid(
 
     val interactionSource = remember { MutableInteractionSource() }
 
+    // Hämtar färger dynamiskt från temat för att ge perfekt kontrast i både ljust och mörkt läge
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+
     Box(
         modifier = modifier
             .scale(scale)
@@ -95,7 +98,7 @@ fun SpaceCardGrid(
             )
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.18f),
+                color = borderColor,
                 shape = cardShape
             )
             .clickable(
@@ -126,7 +129,7 @@ fun SpaceCardGrid(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontSize = 18.sp,
-                        color = textColor
+                        color = contentColor
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -137,7 +140,7 @@ fun SpaceCardGrid(
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = textColor.copy(alpha = 0.75f)
+                            color = contentColor.copy(alpha = 0.75f)
                         ),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -155,12 +158,15 @@ fun SpaceCardWide(
     image: Int,
     backgroundColor: Color,
     modifier: Modifier = Modifier,
-    textColor: Color = Color.White,
     cardShape: CornerBasedShape = RoundedCornerShape(32.dp),
     iconSize: Dp = 80.dp,
     onClick: () -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+
+    // Hämtar färger dynamiskt från temat för att ge perfekt kontrast i både ljust och mörkt läge
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
 
     Box(
         modifier = modifier
@@ -175,7 +181,7 @@ fun SpaceCardWide(
             )
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.18f),
+                color = borderColor,
                 shape = cardShape
             )
             .clickable(
@@ -205,7 +211,7 @@ fun SpaceCardWide(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontSize = 18.sp,
-                    color = textColor
+                    color = contentColor
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -216,7 +222,7 @@ fun SpaceCardWide(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = textColor.copy(alpha = 0.75f)
+                        color = contentColor.copy(alpha = 0.75f)
                     ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis

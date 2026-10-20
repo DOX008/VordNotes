@@ -4,12 +4,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -17,14 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mhss.app.ui.R
-import com.mhss.app.ui.theme.Blue
 import com.mhss.app.ui.theme.MyBrainTheme
+import com.mhss.app.ui.theme.Blue
 import kotlinx.coroutines.delay
 
 @Composable
@@ -32,9 +33,9 @@ fun SpaceCard(
     title: String,
     subtitleRes: Int,
     image: Int,
-    backgroundColor: Color,
+    backgroundColor: Color, // Återinförd för att SpacesScreen.kt ska kunna kompilera utan fel
+    modifier: Modifier = Modifier,
     isPulsing: Boolean = false,
-    modifier: Modifier = Modifier, // Bevezetve a külső elrendezés fogadására
     onClick: () -> Unit = {}
 ) {
     val shape = RoundedCornerShape(15.dp)
@@ -61,16 +62,34 @@ fun SpaceCard(
         label = "heartbeat"
     )
 
-    // GlassSurface lecserélve standard M3 Card-ra árnyékok nélkül,
-    // így megszűnik a koszos/fátyolos hatás.
-    Card(
-        shape = shape,
-        colors = CardDefaults.cardColors(
-            containerColor = backgroundColor
-        ),
-        elevation = CardDefaults.cardElevation(0.dp), // Teljesen kikapcsoljuk a sötétítő tint-réteget
+    val interactionSource = remember { MutableInteractionSource() }
+
+    // Textfärg och ram hämtas dynamikst från Material 3-temat för perfekt kontrast
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+
+    Box(
         modifier = modifier
-            .clickable(onClick = onClick)
+            .scale(scale)
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        backgroundColor.copy(alpha = 0.45f), // Använder den medskickade färgen med exakt samma alfa som Grid-korten
+                        backgroundColor.copy(alpha = 0.25f)
+                    )
+                )
+            )
+            .border(
+                width = 1.dp,
+                color = borderColor,
+                shape = shape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null, // Matchar SpaceCardGrid (ingen M3 standard ripple)
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier
@@ -78,12 +97,12 @@ fun SpaceCard(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Mörk tonad cirkelbakgrund bakom ikonerna
             Box(
                 modifier = Modifier
                     .size(90.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.30f))
-                    .scale(scale),
+                    .background(Color.Black.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -101,8 +120,7 @@ fun SpaceCard(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    // A szöveg színe dinamikusan követi a témát (világos/sötét mód) a fix fehér helyett
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = contentColor
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -110,7 +128,7 @@ fun SpaceCard(
                 Text(
                     text = stringResource(subtitleRes),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                    color = contentColor.copy(alpha = 0.65f),
                     maxLines = 2
                 )
             }
@@ -130,26 +148,3 @@ fun SpaceCardPreview() {
         )
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

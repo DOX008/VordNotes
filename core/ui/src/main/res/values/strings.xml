@@ -1,6 +1,13 @@
 <resources>
 
     <!-- English -->
+
+    <!-- Typsnittsnamn separerade och giltiga -->
+    <string name="font_croissantone">Croissant One</string>
+    <string name="font_nimbussanl">Nimbus San L</string>
+    <string name="font_thyssen">Thyssen</string>
+    <string name="font_kuraleregular">Kurale Regular</string>
+
     <string name="search_for_content">Search care recipients, patients, medications, events in the calendar, etc.</string>
 
     <string name="menu_style">Menu style</string>

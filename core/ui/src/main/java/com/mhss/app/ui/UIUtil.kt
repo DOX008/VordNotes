@@ -56,20 +56,26 @@ fun Int.toNotesView(): ItemView {
 
 fun Int.toFontFamily(): FontFamily {
     return when (this) {
-        0 -> FontFamily.Default
-        1 -> Rubik
-        2 -> FontFamily.Monospace
-        3 -> FontFamily.SansSerif
+        1 -> com.mhss.app.ui.theme.Rubik
+        2 -> com.mhss.app.ui.theme.CroissantOne
+        3 -> com.mhss.app.ui.theme.NimbusSanL
+        4 -> com.mhss.app.ui.theme.Thyssen
+        5 -> com.mhss.app.ui.theme.KuraleRegular
+        6 -> FontFamily.Monospace
+        7 -> FontFamily.SansSerif
         else -> FontFamily.Default
     }
 }
 
 fun FontFamily.toInt(): Int {
     return when (this) {
-        FontFamily.Default -> 0
-        Rubik -> 1
-        FontFamily.Monospace -> 2
-        FontFamily.SansSerif -> 3
+        com.mhss.app.ui.theme.Rubik -> 1
+        com.mhss.app.ui.theme.CroissantOne -> 2
+        com.mhss.app.ui.theme.NimbusSanL -> 3
+        com.mhss.app.ui.theme.Thyssen -> 4
+        com.mhss.app.ui.theme.KuraleRegular -> 5
+        FontFamily.Monospace -> 6
+        FontFamily.SansSerif -> 7
         else -> 0
     }
 }
@@ -100,6 +106,10 @@ fun FontFamily.getName(): String {
     return when (this) {
         FontFamily.Default -> stringResource(R.string.font_system_default)
         Rubik -> "Rubik"
+        com.mhss.app.ui.theme.CroissantOne -> stringResource(R.string.font_croissantone)
+        com.mhss.app.ui.theme.NimbusSanL -> stringResource(R.string.font_nimbussanl)
+        com.mhss.app.ui.theme.Thyssen -> stringResource(R.string.font_thyssen)
+        com.mhss.app.ui.theme.KuraleRegular -> stringResource(R.string.font_kuraleregular)
         FontFamily.Monospace -> "Monospace"
         FontFamily.SansSerif -> "Sans Serif"
         else -> stringResource(R.string.font_system_default)
@@ -157,4 +167,3 @@ fun NetworkResult.Failure.toUserMessage(): String {
         is NetworkResult.OtherError -> if (message != null) message.toString() else stringResource(R.string.unexpected_error)
     }
 }
-

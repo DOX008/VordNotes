@@ -8,11 +8,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.mhss.app.ui.R
 
+// 1. Rubik betűcsalád (Regular és Bold változatokkal)
 val Rubik = FontFamily(
     Font(R.font.rubik_regular),
     Font(R.font.rubik_bold, FontWeight.Bold)
 )
 
+// 2. Croissant One betűcsalád
+val CroissantOne = FontFamily(
+    Font(R.font.croissantone)
+)
+
+// 3. Nimbus San L betűcsalád
+val NimbusSanL = FontFamily(
+    Font(R.font.nimbussanl)
+)
+
+// 4. Thyssen betűcsalád
+val Thyssen = FontFamily(
+    Font(R.font.thyssen)
+)
+
+// 5. Kurale Regular betűcsalád
+val KuraleRegular = FontFamily(
+    Font(R.font.kuraleregular)
+)
+
+// Dinamikus Typography generáló függvény a megadott betűcsaláddal és méretskálázással
 fun getTypography(font: FontFamily, fontSizeScale: Float = 1.0f) = Typography(
     bodyLarge = TextStyle(
         fontWeight = FontWeight.Normal,

@@ -649,12 +649,19 @@ fun AppFontSettingsItem(
     onFontChange: (Int) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
+
+    // Alla 6 tillgängliga typsnitt baserat på bildens exakta filnamn
     val fonts = listOf(
         FontFamily.Default,
-        Rubik,
+        com.mhss.app.ui.theme.Rubik,
+        com.mhss.app.ui.theme.CroissantOne,
+        com.mhss.app.ui.theme.NimbusSanL,
+        com.mhss.app.ui.theme.Thyssen,
+        com.mhss.app.ui.theme.KuraleRegular,
         FontFamily.Monospace,
         FontFamily.SansSerif
     )
+
     SettingsItemCard(
         cornerRadius = 16.dp,
         onClick = {
@@ -681,8 +688,18 @@ fun AppFontSettingsItem(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val currentFontFamily = selectedFont.toFontFamily()
+                val currentFontName = when (currentFontFamily) {
+                    com.mhss.app.ui.theme.Rubik -> "Rubik"
+                    com.mhss.app.ui.theme.CroissantOne -> stringResource(R.string.font_croissantone)
+                    com.mhss.app.ui.theme.NimbusSanL -> stringResource(R.string.font_nimbussanl)
+                    com.mhss.app.ui.theme.Thyssen -> stringResource(R.string.font_thyssen)
+                    com.mhss.app.ui.theme.KuraleRegular -> stringResource(R.string.font_kuraleregular)
+                    else -> currentFontFamily.getName()
+                }
+
                 Text(
-                    selectedFont.toFontFamily().getName(),
+                    text = currentFontName,
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -692,22 +709,35 @@ fun AppFontSettingsItem(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
             ) {
-                fonts.forEach {
-                    DropdownMenuItem(onClick = {
-                        onFontChange(it.toInt())
-                        expanded = false
-                    },
+                fonts.forEach { font ->
+                    val displayName = when (font) {
+                        com.mhss.app.ui.theme.Rubik -> "Rubik"
+                        com.mhss.app.ui.theme.CroissantOne -> stringResource(R.string.font_croissantone)
+                        com.mhss.app.ui.theme.NimbusSanL -> stringResource(R.string.font_nimbussanl)
+                        com.mhss.app.ui.theme.Thyssen -> stringResource(R.string.font_thyssen)
+                        com.mhss.app.ui.theme.KuraleRegular -> stringResource(R.string.font_kuraleregular)
+                        else -> font.getName()
+                    }
+
+                    DropdownMenuItem(
+                        onClick = {
+                            onFontChange(font.toInt())
+                            expanded = false
+                        },
                         text = {
                             Text(
-                                text = it.getName(),
+                                text = displayName,
                                 style = MaterialTheme.typography.bodyLarge
                             )
-                        })
+                        }
+                    )
                 }
             }
         }
     }
 }
+
+
 
 @Composable
 fun FontSizeSettingsItem(
