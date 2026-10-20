@@ -27,7 +27,6 @@ android {
     android {
         packaging {
             resources {
-                // Samma stil: en rad per mönster med {…}-gruppering
                 excludes.add("/META-INF/{AL2.0,LGPL2.1}")
                 excludes.add("/META-INF/{LICENSE,LICENSE.txt,LICENSE.md}")
                 excludes.add("/META-INF/{NOTICE,NOTICE.txt,NOTICE.md}")
@@ -54,6 +53,8 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.firestore.ktx)
 
     implementation(libs.androidx.lifecycle.runtime.compose)
 
@@ -72,5 +73,4 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     implementation(libs.kotlinx.datetime)
-
 }

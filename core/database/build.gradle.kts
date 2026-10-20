@@ -35,6 +35,9 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth.ktx)
+
     implementation("com.benasher44:uuid:0.8.4")
     implementation("com.google.android.gms:play-services-tasks:18.1.0")
     implementation(project(":tasks:domain"))
