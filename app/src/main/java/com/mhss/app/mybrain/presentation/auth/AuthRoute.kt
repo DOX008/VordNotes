@@ -1,5 +1,6 @@
 package com.mhss.app.mybrain.presentation.auth
 
+import com.mhss.app.ui.R
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,8 +28,8 @@ fun AuthRoute(
 
     LaunchedEffect(syncResult) {
         when (syncResult) {
-            true -> Toast.makeText(context, "Synkning klar", Toast.LENGTH_SHORT).show()
-            false -> Toast.makeText(context, "Synkning misslyckades", Toast.LENGTH_SHORT).show()
+            true -> Toast.makeText(context, context.getString(R.string.app_sync_done), Toast.LENGTH_SHORT).show()
+            false -> Toast.makeText(context, context.getString(R.string.app_sync_failed), Toast.LENGTH_SHORT).show()
             null -> {}
         }
     }

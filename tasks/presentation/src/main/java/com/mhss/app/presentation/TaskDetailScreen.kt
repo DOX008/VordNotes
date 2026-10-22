@@ -183,7 +183,7 @@ fun TaskDetailScreen(
                 Text(
                     stringResource(
                         R.string.delete_task_confirmation_message,
-                        uiState.task?.title ?: "Untitled"
+                        uiState.task?.title ?: stringResource(R.string.tasks_untitled)
                     )
                 )
             },

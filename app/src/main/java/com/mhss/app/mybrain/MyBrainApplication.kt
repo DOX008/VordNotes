@@ -150,14 +150,14 @@ class MyBrainApplication : Application() {
     private fun createMedicineBadgeNotificationChannel() {
         val channel = NotificationChannel(
             Constants.MEDICINE_BADGE_CHANNEL_ID,
-            "Medicine badge",
+            getString(R.string.app_medicine_badge_channel_name),
             NotificationManager.IMPORTANCE_MIN
         ).apply {
             setShowBadge(true)
             setSound(null, null)
             enableVibration(false)
             enableLights(false)
-            description = "Shows app icon badge for active medicine alarms"
+            description = getString(R.string.app_medicine_badge_channel_description)
         }
 
         val notificationManager =

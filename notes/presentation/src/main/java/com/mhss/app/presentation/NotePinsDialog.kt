@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.mhss.app.ui.R
 import com.mhss.app.ui.components.notes.NotePin
 import com.mhss.app.ui.theme.Orange
@@ -44,7 +45,7 @@ fun NotePinsDialog(
     AlertDialog(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
         onDismissRequest = onDismiss,
-        title = { Text("Välj pins") },
+        title = { Text(stringResource(R.string.notes_pins_dialog_title)) },
         text = {
             Box(
                 modifier = Modifier
@@ -60,7 +61,7 @@ fun NotePinsDialog(
                     PinRow(
                         iconPainter = painterResource(R.drawable.ic_pin_filled),
                         tint = Orange,
-                        label = "Viktig",
+                        label = stringResource(R.string.notes_pin_important),
                         checked = important,
                         onClick = onToggleImportant
                     )
@@ -97,14 +98,14 @@ fun NotePinsDialog(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
                             painter = painterResource(android.R.drawable.arrow_down_float),
-                            contentDescription = "Fler val",
+                            contentDescription = stringResource(R.string.notes_more_options),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .size(18.dp)
                                 .alpha(0.9f)
                         )
                         Text(
-                            text = "Skrolla för fler val",
+                            text = stringResource(R.string.notes_scroll_for_more),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 2.dp)
@@ -114,7 +115,7 @@ fun NotePinsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Klar") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.complete)) }
         }
     )
 }

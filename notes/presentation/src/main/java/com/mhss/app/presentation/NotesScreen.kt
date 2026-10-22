@@ -458,7 +458,7 @@ fun CombineTab(
                 )
             ) {
                 Text(
-                    text = "Combine",
+                    text = stringResource(R.string.combine),
                     style = MaterialTheme.typography.titleMedium
                 )
             }
@@ -648,25 +648,24 @@ fun AppNotInstalledDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "App is Not Installed",
+                text = stringResource(R.string.notes_app_not_installed_title),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
         },
         text = {
             Text(
-                text = "The required app 'Combine' is not installed on your device. " +
-                        "Would you like to download it?",
+                text = stringResource(R.string.notes_app_not_installed_message),
                 style = MaterialTheme.typography.bodyMedium
             )
         },
         confirmButton = {
             Button(onClick = onDownload) {
-                Text("Download", color = Color.White)
+                Text(stringResource(R.string.notes_download), color = Color.White)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.cancel), color = MaterialTheme.colorScheme.primary)
             }
         }
     )

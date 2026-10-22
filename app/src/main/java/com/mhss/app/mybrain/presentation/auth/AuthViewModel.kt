@@ -7,12 +7,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.benasher44.uuid.Uuid
 import com.google.android.gms.tasks.Task
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.mhss.app.database.MyBrainDatabase
+import com.mhss.app.database.UserDatabaseManager
 import com.mhss.app.database.dao.BookmarkDao
 import com.mhss.app.database.dao.DiaryDao
 import com.mhss.app.database.dao.NoteDao
@@ -23,10 +28,12 @@ import com.mhss.app.database.entity.NoteEntity
 import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
 import com.mhss.app.mybrain.InternetDetector
-import com.mhss.app.util.ApprovedUserConfig
+import com.mhss.app.util.RegistrationValidator
+import com.mhss.app.ui.R
 import com.mhss.app.util.UserDataPaths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,7 +51,7 @@ class AuthViewModel(
     private val app: Application,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
-    private val database: MyBrainDatabase,
+    private val databaseManager: UserDatabaseManager,
     private val noteDao: NoteDao,
     private val taskDao: TaskDao,
     private val diaryDao: DiaryDao,
@@ -52,6 +59,17 @@ class AuthViewModel(
 ) : ViewModel() {
 
     private var syncPaused: Boolean = false
+
+    private var downloadJob: Job? = null
+    private var syncJob: Job? = null
+    private var resyncJob: Job? = null
+    private val itemSyncJobs = java.util.concurrent.CopyOnWriteArrayList<Job>()
+
+    private fun launchItemSync(block: suspend () -> Unit) {
+        val job = viewModelScope.launch(Dispatchers.IO) { block() }
+        itemSyncJobs.add(job)
+        job.invokeOnCompletion { itemSyncJobs.remove(job) }
+    }
 
     private val pendingSyncQueue =
         ArrayDeque<suspend () -> Unit>()
@@ -84,6 +102,7 @@ class AuthViewModel(
     val authMessage: StateFlow<String?> = _authMessage.asStateFlow()
 
     private var wasPreviouslyLoggedIn = false
+    private var registrationInProgress = false
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val currentUser = firebaseAuth.currentUser
@@ -92,13 +111,21 @@ class AuthViewModel(
         Log.d(TAG, "authListener: isNowLoggedIn=$isNowLoggedIn, wasPreviouslyLoggedIn=$wasPreviouslyLoggedIn, uid=${currentUser?.uid}")
         _user.value = currentUser
 
+        if (registrationInProgress) {
+            Log.d(TAG, "authListener: registrering pågår, hoppar över meddelande och sync")
+            wasPreviouslyLoggedIn = isNowLoggedIn
+            return@AuthStateListener
+        }
+
         if (isNowLoggedIn != wasPreviouslyLoggedIn) {
             if (isNowLoggedIn) {
-                _authMessage.value = "Du är nu inloggad – din data synkas till enheten"
+                _authMessage.value = app.getString(R.string.auth_logged_in)
                 Log.d(TAG, "authListener: ny inloggning -> startar downloadAllFromCloud()")
-                viewModelScope.launch { downloadAllFromCloud() }
+                downloadJob?.cancel()
+                downloadJob = viewModelScope.launch { downloadAllFromCloud() }
             } else {
-                _authMessage.value = "Du är nu utloggad"
+                resetSessionState()
+                _authMessage.value = app.getString(R.string.auth_logged_out)
                 Log.d(TAG, "authListener: utloggad")
             }
         }
@@ -112,7 +139,9 @@ class AuthViewModel(
         Log.d(TAG, "init: inloggad=${wasPreviouslyLoggedIn}, uid=${auth.currentUser?.uid}")
 
         auth.addAuthStateListener(authListener)
-        if (hasPersistedQueue()) {
+        if (auth.currentUser == null) {
+            clearQueueFlag()
+        } else if (hasPersistedQueue()) {
             syncPaused = true
             Log.w(TAG, "init: hittade sparad kö-flagga -> syncPaused=true")
         }
@@ -125,31 +154,121 @@ class AuthViewModel(
 
     fun signIn(email: String, password: String, onError: (String) -> Unit) {
         val normalizedEmail = email.trim()
-        if (!ApprovedUserConfig.isApprovedEmail(normalizedEmail)) {
-            val msg = "Inloggning avvisad: endast godkända e-postadresser får användas."
-            Log.w(TAG, "signIn: access denied for email=$normalizedEmail")
-            _authMessage.value = msg
-            onError(msg)
-            return
-        }
 
-        Log.d(TAG, "signIn: försöker logga in för godkänd e-post=${normalizedEmail}")
+        Log.d(TAG, "signIn: försöker logga in för e-post=${RegistrationValidator.maskEmail(normalizedEmail)}")
         auth.signInWithEmailAndPassword(normalizedEmail, password)
             .addOnSuccessListener { result ->
                 Log.d(TAG, "signIn: OK uid=${result.user?.uid}")
                 _user.value = result.user
-                _authMessage.value = "Du är nu inloggad – din data synkas till enheten"
+                _authMessage.value = app.getString(R.string.auth_logged_in)
             }
             .addOnFailureListener { signInError ->
                 Log.w(TAG, "signIn: inloggning misslyckades: ${signInError.message}")
-                _authMessage.value = "Inloggning misslyckades – endast godkända konton får logga in"
-                onError("Authentication failed: ${signInError.localizedMessage}")
+                _authMessage.value = app.getString(R.string.auth_login_failed)
+                onError(app.getString(R.string.auth_login_failed_detail, signInError.localizedMessage ?: ""))
+            }
+    }
+
+    fun registerAccount(
+        email: String,
+        password: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val normalizedEmail = email.trim()
+        val maskedEmail = RegistrationValidator.maskEmail(normalizedEmail)
+        if (auth.currentUser != null) {
+            Log.w(TAG, "registerAccount: användare redan inloggad, avbryter")
+            onError(app.getString(R.string.auth_already_logged_in))
+            return
+        }
+        if (!RegistrationValidator.isValidEmail(normalizedEmail) ||
+            !RegistrationValidator.isValidPassword(password)
+        ) {
+            onError(app.getString(R.string.auth_invalid_input))
+            return
+        }
+
+        Log.d(TAG, "registerAccount: skapar konto för $maskedEmail")
+        registrationInProgress = true
+        auth.createUserWithEmailAndPassword(normalizedEmail, password)
+            .addOnSuccessListener { result ->
+                Log.d(TAG, "registerAccount: OK för $maskedEmail, behåller användaren inloggad")
+                registrationInProgress = false
+                _user.value = result.user
+                _authMessage.value = app.getString(R.string.auth_logged_in)
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                registrationInProgress = false
+                Log.w(TAG, "registerAccount: misslyckades för $maskedEmail: ${e.javaClass.simpleName}")
+                onError(
+                    app.getString(
+                        when (e) {
+                            is FirebaseAuthUserCollisionException -> R.string.auth_email_in_use
+                            is FirebaseAuthWeakPasswordException -> R.string.auth_weak_password
+                            is FirebaseAuthInvalidCredentialsException -> R.string.auth_invalid_email
+                            is FirebaseNetworkException -> R.string.auth_network_error
+                            else -> R.string.auth_register_failed
+                        }
+                    )
+                )
+            }
+    }
+
+    fun sendPasswordReset(
+        email: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val normalizedEmail = email.trim()
+        val maskedEmail = RegistrationValidator.maskEmail(normalizedEmail)
+        if (!RegistrationValidator.isValidEmail(normalizedEmail)) {
+            onError(app.getString(R.string.auth_enter_email_first))
+            return
+        }
+        Log.d(TAG, "sendPasswordReset: skickar återställningsmail till $maskedEmail")
+        auth.sendPasswordResetEmail(normalizedEmail)
+            .addOnSuccessListener {
+                Log.d(TAG, "sendPasswordReset: OK för $maskedEmail")
+                onSuccess()
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "sendPasswordReset: misslyckades för $maskedEmail: ${e.javaClass.simpleName}")
+                when (e) {
+                    is FirebaseAuthInvalidUserException -> onSuccess()
+                    is FirebaseAuthInvalidCredentialsException -> onError(app.getString(R.string.auth_invalid_email))
+                    is FirebaseNetworkException -> onError(app.getString(R.string.auth_no_internet))
+                    else -> onError(app.getString(R.string.auth_reset_failed))
+                }
             }
     }
 
     fun signOut() {
         Log.d(TAG, "signOut()")
+        resetSessionState()
         auth.signOut()
+    }
+
+    /**
+     * Cancels running sync work and clears all auth/sync related state so that the next sign-in
+     * (same or another account) starts from a clean slate.
+     */
+    private fun resetSessionState() {
+        downloadJob?.cancel()
+        syncJob?.cancel()
+        resyncJob?.cancel()
+        downloadJob = null
+        syncJob = null
+        resyncJob = null
+        itemSyncJobs.forEach { it.cancel() }
+        itemSyncJobs.clear()
+        pendingSyncQueue.clear()
+        clearQueueFlag()
+        syncPaused = false
+        _syncInProgress.value = false
+        _syncResult.value = null
+        _authMessage.value = null
     }
 
     fun resyncAllFromCloud() {
@@ -158,13 +277,14 @@ class AuthViewModel(
             return
         }
 
-        viewModelScope.launch {
+        resyncJob?.cancel()
+        resyncJob = viewModelScope.launch {
             Log.d(TAG, "resyncAllFromCloud: START uid=${user.uid}")
             _syncInProgress.value = true
             try {
                 withContext(Dispatchers.IO) {
                     Log.d(TAG, "resyncAllFromCloud: rensar alla lokala tabeller")
-                    database.clearAllTables()
+                    databaseManager.databaseForCurrentUser().clearAllTables()
                     downloadAllFromCloud()
                 }
             } finally {
@@ -185,7 +305,8 @@ class AuthViewModel(
         _syncInProgress.value = true
         Log.d(TAG, "syncNow() starting for uid=${user.uid}")
 
-        viewModelScope.launch {
+        syncJob?.cancel()
+        syncJob = viewModelScope.launch {
             if (!InternetDetector.hasInternet(app)) {
                 Log.w(TAG, "syncNow: inget internet")
                 _syncResult.value = false
@@ -233,6 +354,8 @@ class AuthViewModel(
 
                 _syncResult.value = true
                 Log.d(TAG, "syncNow() completed OK")
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _syncResult.value = false
                 Log.e(TAG, "syncNow() failed: ${e.message}", e)
@@ -256,6 +379,8 @@ class AuthViewModel(
             try {
                 block()
                 pendingSyncQueue.removeFirst()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "resumePendingSyncIfAny: jobb misslyckades: ${e.message}", e)
                 syncPaused = true
@@ -420,6 +545,8 @@ class AuthViewModel(
                 _syncResult.value = false
                 Log.e(TAG, "downloadAllFromCloud: EXIT med fel i steg: $failedSteps")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _syncResult.value = false
             Log.e(TAG, "downloadAllFromCloud: ERROR -> ${e.message}", e)
@@ -435,7 +562,7 @@ class AuthViewModel(
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchItemSync {
             enqueueOrRun {
                 Log.d(TAG, "syncNote: skickar anteckning id=${note.id}")
                 userRef(user.uid).collection("notes").document(note.id.toString()).set(note.toNoteMap()).await()
@@ -452,7 +579,7 @@ class AuthViewModel(
             return
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        launchItemSync {
             enqueueOrRun {
                 Log.d(TAG, "syncBookmark: skickar bokmärke id=${bookmark.id}")
                 userRef(user.uid).collection("bookmarks").document(bookmark.id.toString()).set(bookmark.toBookmarkMap()).await()

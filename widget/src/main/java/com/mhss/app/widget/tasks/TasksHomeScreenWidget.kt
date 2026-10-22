@@ -77,7 +77,7 @@ fun TasksHomeScreenWidget(
                         modifier = GlanceModifier
                             .size(22.dp)
                             .clickable(actionRunCallback<ToggleShowCompletedTasksAction>()),
-                        contentDescription = "Toggle completed tasks",
+                        contentDescription = context.getString(R.string.widget_toggle_completed_tasks),
                         colorFilter = ColorFilter.tint(
                             GlanceTheme.colors.onSecondaryContainer
                         )
@@ -90,7 +90,7 @@ fun TasksHomeScreenWidget(
                         modifier = GlanceModifier
                             .size(22.dp)
                             .clickable(actionRunCallback<AddTaskAction>()),
-                        contentDescription = "Add task",
+                        contentDescription = context.getString(R.string.add_task),
                         colorFilter = ColorFilter.tint(
                             GlanceTheme.colors.onSecondaryContainer
                         )

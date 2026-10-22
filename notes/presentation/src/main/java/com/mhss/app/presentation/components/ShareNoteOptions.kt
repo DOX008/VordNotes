@@ -105,10 +105,10 @@ fun ShareNoteAsPlainTextOption(
                                     messageBody = buildEmailBody(title, content)
                                 )
                                 confirmMessage = if (result.isSuccess) {
-                                    "Din anteckning är nu skickad"
+                                    context.getString(R.string.notes_share_sent)
                                 } else {
-                                    val err = result.exceptionOrNull()?.localizedMessage ?: "Okänt fel"
-                                    "Misslyckades att skicka anteckningen:\n$err"
+                                    val err = result.exceptionOrNull()?.localizedMessage ?: context.getString(R.string.notes_unknown_error)
+                                    context.getString(R.string.notes_share_failed, err)
                                 }
                                 // Visa bekräftelsedialog som användaren själv stänger
                                 showConfirm = true
@@ -182,7 +182,7 @@ private fun ClickToDismissDialog(
                 ) {
                     Text(text = message)
                     Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = onDismiss) { Text("OK") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.notes_ok)) }
                 }
             }
         }

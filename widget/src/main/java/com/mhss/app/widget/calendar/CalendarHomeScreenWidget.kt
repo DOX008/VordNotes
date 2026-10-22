@@ -70,7 +70,7 @@ fun CalendarHomeScreenWidget(
                             .size(22.dp)
                             .clickable(actionRunCallback<RefreshCalendarAction>()),
                         provider = ImageProvider(R.drawable.ic_refresh),
-                        contentDescription = "refresh",
+                        contentDescription = context.getString(R.string.widget_refresh),
                         colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondaryContainer)
                     )
                     Spacer(GlanceModifier.width(12.dp))
@@ -80,7 +80,7 @@ fun CalendarHomeScreenWidget(
                             .clickable(actionRunCallback<AddEventAction>())
                         ,
                         provider = ImageProvider(R.drawable.ic_add),
-                        contentDescription = "add event",
+                        contentDescription = context.getString(R.string.add_event),
                         colorFilter = ColorFilter.tint(GlanceTheme.colors.onSecondaryContainer)
                     )
                 }

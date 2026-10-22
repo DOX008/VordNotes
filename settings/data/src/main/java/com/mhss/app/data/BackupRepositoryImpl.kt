@@ -6,6 +6,7 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.withTransaction
 import com.mhss.app.database.MyBrainDatabase
+import com.mhss.app.database.UserDatabaseManager
 import com.mhss.app.database.entity.BookmarkEntity
 import com.mhss.app.database.entity.DiaryEntryEntity
 import com.mhss.app.database.entity.NoteEntity
@@ -29,9 +30,12 @@ import com.mhss.app.util.CryptoManager
 @Single
 class BackupRepositoryImpl(
     private val context: Context,
-    private val database: MyBrainDatabase,
+    private val databaseManager: UserDatabaseManager,
     @Named("ioDispatcher") private val ioDispatcher: CoroutineDispatcher
 ) : BackupRepository {
+
+    private val database: MyBrainDatabase
+        get() = databaseManager.databaseForCurrentUser()
 
     @OptIn(ExperimentalSerializationApi::class)
     override suspend fun exportDatabase(
@@ -119,30 +123,47 @@ class BackupRepositoryImpl(
                     jsonBytes.toString(Charsets.UTF_8)
                 )
 
-                val oldNoteFolderIdsMap = HashMap<Int, Int>()
-                for ((index, folder) in backupData.noteFolders.withIndex()) {
-                    oldNoteFolderIdsMap[folder.id] = index
-                }
-
                 database.withTransaction {
-                    val newNoteFolderIds =
-                        database.noteDao().insertNoteFolders(
-                            backupData.noteFolders.withoutIds()
-                        )
+                    val noteDao = database.noteDao()
+                    val folders = backupData.noteFolders
+                    // Pass 1: insert all folders as roots, collect old id -> new id
+                    val newIds = noteDao.insertNoteFolders(
+                        folders.map { it.copy(id = 0, parentId = null) }
+                    )
+                    val oldToNewFolderId = HashMap<Int, Int>()
+                    folders.forEachIndexed { index, folder ->
+                        val newId = newIds[index]
+                        if (newId > 0L) oldToNewFolderId[folder.id] = newId.toInt()
+                    }
+
+                    // Pass 2: restore parent links (any depth) using the new ids
+                    val oldParents = folders.associate { it.id to it.parentId }
+                    folders.forEach { folder ->
+                        val parentOld = folder.parentId ?: return@forEach
+                        val newId = oldToNewFolderId[folder.id] ?: return@forEach
+                        val newParent = oldToNewFolderId[parentOld]
+                        when {
+                            newParent == null -> Log.w(
+                                TAG,
+                                "Orphan parentId=$parentOld for folder '${folder.name}' (old id=${folder.id}); importing as root"
+                            )
+                            hasCycle(folder.id, oldParents) -> Log.w(
+                                TAG,
+                                "Cyclic parentId=$parentOld for folder '${folder.name}' (old id=${folder.id}); importing as root"
+                            )
+                            else -> noteDao.updateNoteFolder(
+                                folder.copy(id = newId, parentId = newParent)
+                            )
+                        }
+                    }
 
                     val notes = backupData.notes.map { note ->
-                        note.copy(
-                            folderId = note.folderId?.let {
-                                if (oldNoteFolderIdsMap.containsKey(it)) {
-                                    newNoteFolderIds[oldNoteFolderIdsMap[it]!!].toInt()
-                                } else {
-                                    null
-                                }
-                            },
-                            id = 0,
-                            pins = note.pins  // ← EXPLICIT: bevara pins
-                        )
-
+                        val oldFolderId = note.folderId
+                        val newFolderId = oldFolderId?.let { oldToNewFolderId[it] }
+                        if (oldFolderId != null && newFolderId == null) {
+                            Log.w(TAG, "Note '${note.title}' references missing folderId=$oldFolderId; importing without folder")
+                        }
+                        note.copy(folderId = newFolderId, id = 0)
                     }
                     database.noteDao().insertNotes(notes)
                     database.taskDao().insertTasks(backupData.tasks.withoutIds())
@@ -151,10 +172,24 @@ class BackupRepositoryImpl(
                 }
                 true
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "importDatabase failed", e)
                 false
             }
         }
+    }
+
+    private fun hasCycle(startId: Int, parents: Map<Int, Int?>): Boolean {
+        val visited = HashSet<Int>()
+        var current: Int? = startId
+        while (current != null) {
+            if (!visited.add(current)) return true
+            current = parents[current]
+        }
+        return false
+    }
+
+    private companion object {
+        const val TAG = "BACKUP"
     }
 
     @Serializable

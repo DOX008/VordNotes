@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.mhss.app.domain.model.AiMessageAttachment
+import androidx.compose.ui.res.stringResource
 import com.mhss.app.ui.R
 import com.mhss.app.domain.model.Note
 import com.mhss.app.domain.model.SubTask
@@ -116,7 +117,7 @@ fun AiChatBar(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_send),
-                            contentDescription = "Send",
+                            contentDescription = stringResource(R.string.send),
                             modifier = Modifier
                                 .size(24.dp)
                                 .graphicsLayer {

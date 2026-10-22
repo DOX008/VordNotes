@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +42,10 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import com.mhss.app.util.RegistrationValidator
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,6 +64,7 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showAppInfo by rememberSaveable { mutableStateOf(false) }
     var showLoginDialog by rememberSaveable { mutableStateOf(false) }
+    var showRegisterDialog by rememberSaveable { mutableStateOf(false) }
 
     val showMaterialYouOption = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
     val context = LocalContext.current
@@ -85,9 +91,8 @@ fun SettingsScreen(
                         Text(stringResource(android.R.string.ok))
                     }
                 },
-                title = { Text("App info") },
-                text = { Text("VordNote \n" +
-                        "This application is designed and created by Alexander Andreassen") }
+                title = { Text(stringResource(R.string.app_info)) },
+                text = { Text(stringResource(R.string.app_info_text)) }
             )
         }
 
@@ -97,10 +102,51 @@ fun SettingsScreen(
                 onConfirm = { email, password ->
                     authViewModel.signIn(email, password) { /* valfritt: hantera fel */ }
                     showLoginDialog = false
+                },
+                onForgotPassword = { email, onFinished, onError ->
+                    authViewModel.sendPasswordReset(
+                        email = email,
+                        onSuccess = {
+                            onFinished()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.forgot_password_sent_toast, email),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        onError = { msg ->
+                            onFinished()
+                            onError(msg)
+                        }
+                    )
                 }
             )
         }
 
+        if (showRegisterDialog) {
+            RegisterDialog(
+                onDismiss = { showRegisterDialog = false },
+                onRegister = { email, password, onFinished, onError ->
+                    authViewModel.registerAccount(
+                        email = email,
+                        password = password,
+                        onSuccess = {
+                            onFinished()
+                            showRegisterDialog = false
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.register_success_logged_in_toast),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        },
+                        onError = { msg ->
+                            onFinished()
+                            onError(msg)
+                        }
+                    )
+                }
+            )
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -145,12 +191,12 @@ fun SettingsScreen(
                     var text by remember { mutableStateOf(keywordsFlow.value) }
                     AlertDialog(
                         onDismissRequest = { showKeywordsDialog = false },
-                        title = { Text("Redigera Schedule-ord") },
+                        title = { Text(stringResource(R.string.app_edit_schedule_keywords)) },
                         text = {
                             OutlinedTextField(
                                 value = text,
                                 onValueChange = { text = it },
-                                label = { Text("Kommaseparerade ord (t.ex. Tillsyn, Kamera)") },
+                                label = { Text(stringResource(R.string.app_schedule_keywords_label)) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         },
@@ -176,7 +222,7 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(painter = painterResource(R.drawable.ic_schedule), contentDescription = null, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(text = "Redigera Schedule-ord", style = MaterialTheme.typography.bodyLarge)
+                        Text(text = stringResource(R.string.app_edit_schedule_keywords), style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }
@@ -390,7 +436,7 @@ fun SettingsScreen(
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "Resync all",
+                            text = stringResource(R.string.app_resync_all),
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }
@@ -423,12 +469,44 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "App info",
+                            contentDescription = stringResource(R.string.app_info),
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "App info",
+                            text = stringResource(R.string.app_info),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+            item {
+                SettingsItemCard(
+                    cornerRadius = 16.dp,
+                    onClick = {
+                        if (currentUser != null) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.register_already_logged_in),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            showRegisterDialog = true
+                        }
+                    }
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.alpha(if (currentUser == null) 1f else 0.5f)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_person_add),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.register_account),
                             style = MaterialTheme.typography.bodyLarge,
                         )
                     }
@@ -813,11 +891,19 @@ fun Context.getPackageInfo(): PackageInfo {
 @Composable
 private fun LoginDialog(
     onDismiss: () -> Unit,
-    onConfirm: (email: String, password: String) -> Unit
+    onConfirm: (email: String, password: String) -> Unit,
+    onForgotPassword: (
+        email: String,
+        onFinished: () -> Unit,
+        onError: (String) -> Unit
+    ) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var resetLoading by remember { mutableStateOf(false) }
+    var resetError by remember { mutableStateOf<String?>(null) }
     val confirmEnabled = email.isNotBlank() && password.isNotBlank()
+    val context = LocalContext.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -826,9 +912,11 @@ private fun LoginDialog(
             Column {
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { email = it; resetError = null },
                     label = { Text(stringResource(R.string.email)) },
                     singleLine = true,
+                    isError = resetError != null,
+                    supportingText = { resetError?.let { Text(it) } },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(12.dp))
@@ -840,6 +928,26 @@ private fun LoginDialog(
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(Modifier.height(4.dp))
+                TextButton(
+                    onClick = {
+                        val trimmed = email.trim()
+                        if (!RegistrationValidator.isValidEmail(trimmed)) {
+                            resetError = context.getString(R.string.forgot_password_enter_email)
+                        } else {
+                            resetError = null
+                            resetLoading = true
+                            onForgotPassword(
+                                trimmed,
+                                { resetLoading = false },
+                                { resetError = it }
+                            )
+                        }
+                    },
+                    enabled = !resetLoading
+                ) {
+                    Text(stringResource(R.string.forgot_password))
+                }
             }
         },
         confirmButton = {
@@ -852,6 +960,136 @@ private fun LoginDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun RegisterDialog(
+    onDismiss: () -> Unit,
+    onRegister: (
+        email: String,
+        password: String,
+        onFinished: () -> Unit,
+        onError: (String) -> Unit
+    ) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var submitted by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var serverError by remember { mutableStateOf<String?>(null) }
+
+    val emailValid = RegistrationValidator.isValidEmail(email)
+    val passwordValid = RegistrationValidator.isValidPassword(password)
+    val matches = RegistrationValidator.passwordsMatch(password, confirm)
+    val passwordTransformation =
+        if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
+
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text(text = stringResource(R.string.register_account)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it; serverError = null },
+                    label = { Text(stringResource(R.string.email)) },
+                    singleLine = true,
+                    enabled = !loading,
+                    isError = submitted && !emailValid,
+                    supportingText = {
+                        if (submitted && !emailValid) {
+                            Text(stringResource(R.string.register_invalid_email))
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it; serverError = null },
+                    label = { Text(stringResource(R.string.password)) },
+                    singleLine = true,
+                    enabled = !loading,
+                    isError = submitted && !passwordValid,
+                    supportingText = {
+                        if (submitted && !passwordValid) {
+                            Text(stringResource(R.string.register_password_too_short))
+                        }
+                    },
+                    visualTransformation = passwordTransformation,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                painter = painterResource(if (passwordVisible) R.drawable.ic_visibility_off else R.drawable.ic_visibility),
+                                contentDescription = stringResource(
+                                    if (passwordVisible) R.string.hide_password else R.string.show_password
+                                )
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = confirm,
+                    onValueChange = { confirm = it; serverError = null },
+                    label = { Text(stringResource(R.string.confirm_password)) },
+                    singleLine = true,
+                    enabled = !loading,
+                    isError = submitted && !matches,
+                    supportingText = {
+                        if (submitted && !matches) {
+                            Text(stringResource(R.string.register_passwords_mismatch))
+                        }
+                    },
+                    visualTransformation = passwordTransformation,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                serverError?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !loading,
+                onClick = {
+                    submitted = true
+                    if (emailValid && passwordValid && matches) {
+                        loading = true
+                        serverError = null
+                        onRegister(
+                            email.trim(),
+                            password,
+                            { loading = false },
+                            { serverError = it }
+                        )
+                    }
+                }
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(stringResource(R.string.register))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !loading) {
                 Text(stringResource(R.string.cancel))
             }
         }

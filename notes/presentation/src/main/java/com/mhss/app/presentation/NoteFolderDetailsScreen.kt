@@ -225,7 +225,7 @@ fun NoteFolderDetailsScreen(
                             )
                             Icon(
                                 painter = painterResource(R.drawable.ic_medicine),
-                                contentDescription = "Subfolder",
+                                contentDescription = stringResource(R.string.notes_subfolder),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -258,7 +258,7 @@ fun NoteFolderDetailsScreen(
                     if (uiState.notesOrder is Order.Manual) {
                         Icon(
                             imageVector = Icons.Default.SwapVert,
-                            contentDescription = "Manuell sortering aktiv",
+                            contentDescription = stringResource(R.string.notes_manual_sort_active),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
                         )
@@ -343,7 +343,7 @@ fun NoteFolderDetailsScreen(
                 // Staggered grid – ingen drag & drop ännu
                 item {
                     Text(
-                        text = "Drag & drop stöds endast i listvyn",
+                        text = stringResource(R.string.notes_drag_drop_list_only),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)
                     )

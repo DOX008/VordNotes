@@ -266,7 +266,7 @@ fun NoteDetailsScreen(
                         IconButton(onClick = { showPinsDialog = true }) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_pin_filled),
-                                contentDescription = "Pins",
+                                contentDescription = stringResource(R.string.notes_pins),
                                 modifier = Modifier.size(24.dp),
                                 tint = Color.Red
                             )
