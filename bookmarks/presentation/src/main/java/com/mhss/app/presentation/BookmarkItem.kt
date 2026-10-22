@@ -20,7 +20,9 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import com.mhss.app.domain.model.Bookmark
+import com.mhss.app.ui.R
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -97,7 +99,7 @@ fun BookmarkItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit",
+                    contentDescription = stringResource(R.string.bookmarks_edit),
                     tint = MaterialTheme.colorScheme.onSurface
                 )
             }
