@@ -89,6 +89,17 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+// Migration 8 → 9: bilder i dagboksinlägg (lokala filsökvägar, en per rad)
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        if (!db.hasColumn("diary", "images")) {
+            db.execSQL(
+                "ALTER TABLE diary ADD COLUMN images TEXT NOT NULL DEFAULT ''"
+            )
+        }
+    }
+}
+
 // Migration 7 → 8: flera vård-pins per anteckning
 val MIGRATION_7_8 = object : Migration(7, 8) {
     override fun migrate(db: SupportSQLiteDatabase) {

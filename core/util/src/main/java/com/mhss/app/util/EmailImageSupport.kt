@@ -130,7 +130,7 @@ internal fun buildEmailHtmlBody(
     """.trimIndent()
 }
 
-private fun String.htmlEscape(): String = replace("&", "&amp;")
+internal fun String.htmlEscape(): String = replace("&", "&amp;")
     .replace("<", "&lt;")
     .replace(">", "&gt;")
     .replace("\"", "&quot;")

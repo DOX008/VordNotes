@@ -76,6 +76,7 @@ class DiaryDetailsViewModel(
                             title = event.currentEntry.title,
                             content = event.currentEntry.content,
                             mood = event.currentEntry.mood,
+                            images = event.currentEntry.images,
                             createdDate = event.currentEntry.createdDate,
                             updatedDate = now()
                         )
@@ -91,6 +92,7 @@ class DiaryDetailsViewModel(
         return entry.title != newEntry.title ||
                 entry.content != newEntry.content ||
                 entry.mood != newEntry.mood ||
+                entry.images != newEntry.images ||
                 entry.createdDate != newEntry.createdDate
     }
 
