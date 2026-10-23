@@ -10,6 +10,9 @@ interface BookmarkDao {
     @Query("SELECT * FROM bookmarks")
     fun getAllBookmarks(): Flow<List<BookmarkEntity>>
 
+    @Query("DELETE FROM bookmarks")
+    suspend fun deleteAllBookmarks()
+
     @Query("SELECT * FROM bookmarks WHERE id = :id")
     suspend fun getBookmark(id: Int): BookmarkEntity
 

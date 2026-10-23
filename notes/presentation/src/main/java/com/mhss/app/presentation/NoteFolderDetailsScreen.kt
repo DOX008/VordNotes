@@ -181,7 +181,7 @@ fun NoteFolderDetailsScreen(
                     )
                 }
 
-                items(subfolders, key = { it.id }) { subfolder ->
+                items(subfolders, key = { "folder-${it.id}" }) { subfolder ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -270,7 +270,7 @@ fun NoteFolderDetailsScreen(
             if (uiState.noteView == ItemView.LIST) {
                 itemsIndexed(
                     items = uiState.folderNotes,
-                    key = { _, note -> note.id }
+                    key = { _, note -> "note-${note.id}" }
                 ) { index, note ->
 
                     var isDragging by remember { mutableStateOf(false) }
@@ -348,7 +348,7 @@ fun NoteFolderDetailsScreen(
                         modifier = Modifier.padding(16.dp)
                     )
                 }
-                items(uiState.folderNotes, key = { it.id }) { note ->
+                items(uiState.folderNotes, key = { "note-${it.id}" }) { note ->
                     NoteCard(
                         note = note,
                         onClick = {

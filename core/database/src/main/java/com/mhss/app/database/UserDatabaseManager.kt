@@ -2,6 +2,7 @@ package com.mhss.app.database
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.withTransaction
 import com.google.firebase.auth.FirebaseAuth
 import com.mhss.app.database.dao.AlarmDao
 import com.mhss.app.database.dao.BookmarkDao
@@ -11,6 +12,7 @@ import com.mhss.app.database.dao.TaskDao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.ConcurrentHashMap
 
 class UserDatabaseManager(
@@ -66,6 +68,56 @@ class UserDatabaseManager(
                 )
                 .fallbackToDestructiveMigration()
                 .build()
+        }
+    }
+
+    suspend fun mergeGuestDataInto(uid: String) {
+        if (uid == GUEST_UID) return
+
+        val guestDatabase = getOrCreate(GUEST_UID)
+        val userDatabase = getOrCreate(uid)
+        val guestFolders = guestDatabase.noteDao().getAllNoteFolders().first()
+        val guestNotes = guestDatabase.noteDao().getAllNotes()
+        val guestTasks = guestDatabase.taskDao().getAllTasks().first()
+        val guestDiaryEntries = guestDatabase.diaryDao().getAllFullEntries()
+        val guestBookmarks = guestDatabase.bookmarkDao().getAllBookmarks().first()
+
+        userDatabase.withTransaction {
+            val folderIds = mutableMapOf<Int, Int>()
+            guestFolders.forEach { folder ->
+                val newId = userDatabase.noteDao().insertNoteFolder(
+                    folder.copy(id = 0, parentId = null)
+                )
+                if (newId > 0L) folderIds[folder.id] = newId.toInt()
+            }
+            guestFolders.forEach { folder ->
+                val newId = folderIds[folder.id] ?: return@forEach
+                userDatabase.noteDao().updateNoteFolder(
+                    folder.copy(id = newId, parentId = folder.parentId?.let(folderIds::get))
+                )
+            }
+            guestNotes.forEach { note ->
+                userDatabase.noteDao().insertNote(
+                    note.copy(id = 0, folderId = note.folderId?.let(folderIds::get))
+                )
+            }
+            guestTasks.forEach { task ->
+                userDatabase.taskDao().insertTask(task.copy(id = 0))
+            }
+            guestDiaryEntries.forEach { entry ->
+                userDatabase.diaryDao().insertEntry(entry.copy(id = 0))
+            }
+            guestBookmarks.forEach { bookmark ->
+                userDatabase.bookmarkDao().insertBookmark(bookmark.copy(id = 0))
+            }
+        }
+
+        guestDatabase.withTransaction {
+            guestDatabase.noteDao().deleteAllNotes()
+            guestDatabase.noteDao().deleteAllNoteFolders()
+            guestDatabase.taskDao().deleteAllTasks()
+            guestDatabase.diaryDao().deleteAllEntries()
+            guestDatabase.bookmarkDao().deleteAllBookmarks()
         }
     }
 

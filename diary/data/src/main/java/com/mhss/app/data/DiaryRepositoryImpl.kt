@@ -4,7 +4,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mhss.app.database.dao.DiaryDao
 import com.mhss.app.database.entity.*
-import com.mhss.app.database.remote.await
 import com.mhss.app.database.remote.toDiaryDoc
 import com.mhss.app.domain.model.DiaryEntry
 import com.mhss.app.domain.repository.DiaryRepository
@@ -35,41 +34,38 @@ class DiaryRepositoryImpl(
         withContext(ioDispatcher) { diaryDao.getEntriesByTitle(title).map { it.toDiaryEntry() } }
 
     override suspend fun addEntry(diary: DiaryEntry): Long {
-        val uid = auth.currentUser?.uid ?: return 0L
+        val uid = auth.currentUser?.uid
         return withContext(ioDispatcher) {
             val newId = diaryDao.insertEntry(diary.toDiaryEntryEntity())
-            if (newId != 0L) {
+            if (uid != null && newId != 0L) {
                 val entity = diary.toDiaryEntryEntity().copy(id = newId.toInt())
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .set(toDiaryDoc(entity))
-                    .await()
             }
             newId
         }
     }
 
     override suspend fun updateEntry(diary: DiaryEntry) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             diaryDao.updateEntry(diary.toDiaryEntryEntity())
-            if (diary.id != 0) {
+            if (uid != null && diary.id != 0) {
                 val entity = diary.toDiaryEntryEntity()
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .set(toDiaryDoc(entity))
-                    .await()
             }
         }
     }
 
     override suspend fun deleteEntry(diary: DiaryEntry) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val entity = diary.toDiaryEntryEntity()
             diaryDao.deleteEntry(entity)
-            if (entity.id != 0) {
+            if (uid != null && entity.id != 0) {
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .delete()
-                    .await()
             }
         }
     }

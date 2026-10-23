@@ -18,18 +18,14 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mhss.app.database.UserDatabaseManager
-import com.mhss.app.database.dao.BookmarkDao
-import com.mhss.app.database.dao.DiaryDao
-import com.mhss.app.database.dao.NoteDao
-import com.mhss.app.database.dao.TaskDao
 import com.mhss.app.database.entity.BookmarkEntity
 import com.mhss.app.database.entity.DiaryEntryEntity
 import com.mhss.app.database.entity.NoteEntity
 import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
 import com.mhss.app.mybrain.InternetDetector
-import com.mhss.app.util.RegistrationValidator
 import com.mhss.app.ui.R
+import com.mhss.app.util.RegistrationValidator
 import com.mhss.app.util.UserDataPaths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -51,12 +47,21 @@ class AuthViewModel(
     private val app: Application,
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
-    private val databaseManager: UserDatabaseManager,
-    private val noteDao: NoteDao,
-    private val taskDao: TaskDao,
-    private val diaryDao: DiaryDao,
-    private val bookmarkDao: BookmarkDao
+    private val databaseManager: UserDatabaseManager
 ) : ViewModel() {
+
+    // Viktigt: initiera dessa tidigt så de alltid finns innan init/startSyncForUser körs
+    private val _syncInProgress = MutableStateFlow(false)
+    val syncInProgress: StateFlow<Boolean> = _syncInProgress.asStateFlow()
+
+    private val _syncResult = MutableStateFlow<Boolean?>(null)
+    val syncResult: StateFlow<Boolean?> = _syncResult.asStateFlow()
+
+    private val _user = MutableStateFlow<FirebaseUser?>(null)
+    val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
+
+    private val _authMessage = MutableStateFlow<String?>(null)
+    val authMessage: StateFlow<String?> = _authMessage.asStateFlow()
 
     private var syncPaused: Boolean = false
 
@@ -71,8 +76,7 @@ class AuthViewModel(
         job.invokeOnCompletion { itemSyncJobs.remove(job) }
     }
 
-    private val pendingSyncQueue =
-        ArrayDeque<suspend () -> Unit>()
+    private val pendingSyncQueue = ArrayDeque<suspend () -> Unit>()
 
     private val queueFileName = "pending_sync_queue.flag"
 
@@ -95,34 +99,28 @@ class AuthViewModel(
         return file.exists()
     }
 
-    private val _user = MutableStateFlow<FirebaseUser?>(null)
-    val user: StateFlow<FirebaseUser?> = _user.asStateFlow()
-
-    private val _authMessage = MutableStateFlow<String?>(null)
-    val authMessage: StateFlow<String?> = _authMessage.asStateFlow()
-
-    private var wasPreviouslyLoggedIn = false
+    private var previousUid: String? = auth.currentUser?.uid
     private var registrationInProgress = false
 
     private val authListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         val currentUser = firebaseAuth.currentUser
-        val isNowLoggedIn = currentUser != null
+        val currentUid = currentUser?.uid
+        val oldUid = previousUid
 
-        Log.d(TAG, "authListener: isNowLoggedIn=$isNowLoggedIn, wasPreviouslyLoggedIn=$wasPreviouslyLoggedIn, uid=${currentUser?.uid}")
+        Log.d(TAG, "authListener: uid=$currentUid, previousUid=$oldUid")
         _user.value = currentUser
 
         if (registrationInProgress) {
             Log.d(TAG, "authListener: registrering pågår, hoppar över meddelande och sync")
-            wasPreviouslyLoggedIn = isNowLoggedIn
+            previousUid = currentUid
             return@AuthStateListener
         }
 
-        if (isNowLoggedIn != wasPreviouslyLoggedIn) {
-            if (isNowLoggedIn) {
+        if (currentUid != oldUid) {
+            if (currentUser != null) {
+                if (oldUid != null) resetSessionState()
                 _authMessage.value = app.getString(R.string.auth_logged_in)
-                Log.d(TAG, "authListener: ny inloggning -> startar downloadAllFromCloud()")
-                downloadJob?.cancel()
-                downloadJob = viewModelScope.launch { downloadAllFromCloud() }
+                startSyncForUser(currentUser.uid)
             } else {
                 resetSessionState()
                 _authMessage.value = app.getString(R.string.auth_logged_out)
@@ -130,13 +128,12 @@ class AuthViewModel(
             }
         }
 
-        wasPreviouslyLoggedIn = isNowLoggedIn
+        previousUid = currentUid
     }
 
     init {
-        wasPreviouslyLoggedIn = auth.currentUser != null
         _user.value = auth.currentUser
-        Log.d(TAG, "init: inloggad=${wasPreviouslyLoggedIn}, uid=${auth.currentUser?.uid}")
+        Log.d(TAG, "init: inloggad=${auth.currentUser != null}, uid=${auth.currentUser?.uid}")
 
         auth.addAuthStateListener(authListener)
         if (auth.currentUser == null) {
@@ -145,6 +142,7 @@ class AuthViewModel(
             syncPaused = true
             Log.w(TAG, "init: hittade sparad kö-flagga -> syncPaused=true")
         }
+        auth.currentUser?.uid?.let(::startSyncForUser)
     }
 
     override fun onCleared() {
@@ -197,6 +195,7 @@ class AuthViewModel(
                 registrationInProgress = false
                 _user.value = result.user
                 _authMessage.value = app.getString(R.string.auth_logged_in)
+                result.user?.uid?.let(::startSyncForUser)
                 onSuccess()
             }
             .addOnFailureListener { e ->
@@ -271,6 +270,17 @@ class AuthViewModel(
         _authMessage.value = null
     }
 
+    private fun startSyncForUser(uid: String) {
+        downloadJob?.cancel()
+        downloadJob = viewModelScope.launch {
+            if (auth.currentUser?.uid != uid) return@launch
+            if (InternetDetector.hasInternet(app)) downloadAllFromCloud()
+            if (auth.currentUser?.uid != uid) return@launch
+            databaseManager.mergeGuestDataInto(uid)
+            if (auth.currentUser?.uid == uid) syncNow()
+        }
+    }
+
     fun resyncAllFromCloud() {
         val user = auth.currentUser ?: run {
             Log.w(TAG, "resyncAllFromCloud: ingen inloggad användare, avbryter")
@@ -284,7 +294,7 @@ class AuthViewModel(
             try {
                 withContext(Dispatchers.IO) {
                     Log.d(TAG, "resyncAllFromCloud: rensar alla lokala tabeller")
-                    databaseManager.databaseForCurrentUser().clearAllTables()
+                    databaseManager.getOrCreate(user.uid).clearAllTables()
                     downloadAllFromCloud()
                 }
             } finally {
@@ -307,49 +317,51 @@ class AuthViewModel(
 
         syncJob?.cancel()
         syncJob = viewModelScope.launch {
-            if (!InternetDetector.hasInternet(app)) {
-                Log.w(TAG, "syncNow: inget internet")
-                _syncResult.value = false
-                _syncInProgress.value = false
-                onDone()
-                return@launch
-            }
             syncPaused = false
             resumePendingSyncIfAny()
             try {
                 withContext(Dispatchers.IO) {
-                    val notes = noteDao.getAllNotes()
-                    val noteFolders = noteDao.getAllNoteFolders().first()
-                    val tasks = taskDao.getAllTasks().first()
-                    val diary = diaryDao.getAllEntries().first()
-                    val bookmarks = bookmarkDao.getAllBookmarks().first()
+                    val userDatabase = databaseManager.getOrCreate(user.uid)
+                    val userNotes = userDatabase.noteDao()
+                    val notes = userNotes.getAllNotes()
+                    val noteFolders = userNotes.getAllNoteFolders().first()
+                    val tasks = userDatabase.taskDao().getAllTasks().first()
+                    val diary = userDatabase.diaryDao().getAllFullEntries()
+                    val bookmarks = userDatabase.bookmarkDao().getAllBookmarks().first()
 
                     val userRef = UserDataPaths.userRoot(firestore, user.uid)
-                    val batch = firestore.batch()
+                    val writes = mutableListOf<Pair<DocumentReference, Map<String, Any?>>>()
 
                     notes.filter { it.id != 0 }.forEach { n ->
-                        batch.set(userRef.collection("notes").document(n.id.toString()), n.toNoteMap())
+                        writes += userRef.collection("notes").document(n.id.toString()) to n.toNoteMap()
                     }
                     noteFolders.filter { it.id != 0 }.forEach { f ->
-                        batch.set(userRef.collection("folders").document(f.id.toString()), f.toFolderMap())
+                        writes += userRef.collection("folders").document(f.id.toString()) to f.toFolderMap()
                     }
                     tasks.filter { it.id != 0 }.forEach { t ->
-                        batch.set(userRef.collection("tasks").document(t.id.toString()), t.toTaskMap())
+                        writes += userRef.collection("tasks").document(t.id.toString()) to t.toTaskMap()
                     }
                     diary.filter { it.id != 0 }.forEach { d ->
-                        batch.set(userRef.collection("diary").document(d.id.toString()), d.toDiaryMap())
+                        writes += userRef.collection("diary").document(d.id.toString()) to d.toDiaryMap()
                     }
                     bookmarks.filter { it.id != 0 }.forEach { b ->
-                        batch.set(userRef.collection("bookmarks").document(b.id.toString()), b.toBookmarkMap())
+                        writes += userRef.collection("bookmarks").document(b.id.toString()) to b.toBookmarkMap()
+                    }
+
+                    writes.chunked(450).forEach { chunk ->
+                        val batch = firestore.batch()
+                        chunk.forEach { (document, data) -> batch.set(document, data) }
+                        batch.commit().await()
                     }
 
                     val meta = hashMapOf(
                         "device" to Build.MODEL,
                         "lastSync" to FieldValue.serverTimestamp()
                     )
-                    batch.set(userRef.collection("meta").document("sync"), meta)
-
-                    batch.commit().await()
+                    firestore.batch()
+                        .set(userRef.collection("meta").document("sync"), meta)
+                        .commit()
+                        .await()
                 }
 
                 _syncResult.value = true
@@ -413,6 +425,11 @@ class AuthViewModel(
         }
 
         val base = UserDataPaths.userRoot(firestore, user.uid)
+        val userDatabase = databaseManager.getOrCreate(user.uid)
+        val userNoteDao = userDatabase.noteDao()
+        val userTaskDao = userDatabase.taskDao()
+        val userDiaryDao = userDatabase.diaryDao()
+        val userBookmarkDao = userDatabase.bookmarkDao()
         Log.d(TAG, "downloadAllFromCloud: ENTER for uid=${user.uid}")
         _syncInProgress.value = true
 
@@ -431,13 +448,13 @@ class AuthViewModel(
                             )
                         }
                         if (folders.isNotEmpty()) {
-                            noteDao.insertNoteFolders(folders)
+                            userNoteDao.insertNoteFolders(folders)
                         }
                     }) failedSteps.add("Folders")
 
                 if (!runLogged("Notes") {
                         val snap = base.collection("notes").get().await()
-                        val validFolderIds = noteDao.getAllNoteFolders().first().map { it.id }.toSet()
+                        val validFolderIds = userNoteDao.getAllNoteFolders().first().map { it.id }.toSet()
                         val notes = snap.documents.mapNotNull { d ->
                             val data = d.data ?: return@mapNotNull null
                             val rawFolderId = (data["folderId"] as? Number)?.toInt()
@@ -456,7 +473,7 @@ class AuthViewModel(
                             )
                         }
                         if (notes.isNotEmpty()) {
-                            noteDao.insertNotes(notes)
+                            userNoteDao.insertNotes(notes)
                         }
                     }) failedSteps.add("Notes")
 
@@ -478,7 +495,7 @@ class AuthViewModel(
                                 id = (data["id"] as? Number)?.toInt() ?: 0
                             )
                         }
-                        if (entries.isNotEmpty()) diaryDao.insertEntries(entries)
+                        if (entries.isNotEmpty()) userDiaryDao.insertEntries(entries)
                     }) failedSteps.add("Diary")
 
                 if (!runLogged("Tasks") {
@@ -493,6 +510,7 @@ class AuthViewModel(
                                 priority = (data["priority"] as? Number)?.toInt() ?: 0,
                                 createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
                                 updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+                                lastFiredDate = (data["lastFiredDate"] as? Number)?.toLong() ?: 0L,
                                 subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
                                     val map = raw as? Map<*, *> ?: return@mapNotNull null
                                     val idValue = map["id"] ?: return@mapNotNull null
@@ -516,7 +534,7 @@ class AuthViewModel(
                                 frequencyAmount = (data["frequencyAmount"] as? Number)?.toInt() ?: 0
                             )
                         }
-                        if (tasks.isNotEmpty()) taskDao.insertTasks(tasks)
+                        if (tasks.isNotEmpty()) userTaskDao.insertTasks(tasks)
                     }) failedSteps.add("Tasks")
 
                 if (!runLogged("Bookmarks") {
@@ -532,7 +550,7 @@ class AuthViewModel(
                                 id = (data["id"] as? Number)?.toInt() ?: 0
                             )
                         }
-                        if (bookmarks.isNotEmpty()) bookmarkDao.insertBookmarks(bookmarks)
+                        if (bookmarks.isNotEmpty()) userBookmarkDao.insertBookmarks(bookmarks)
                     }) failedSteps.add("Bookmarks")
 
                 runLogged("Meta") { touchMeta() }
@@ -655,6 +673,7 @@ class AuthViewModel(
             "priority" to priority,
             "createdDate" to createdDate,
             "updatedDate" to updatedDate,
+            "lastFiredDate" to lastFiredDate,
             "subTasks" to subTasksList,
             "dueDate" to dueDate,
             "recurring" to recurring,
@@ -694,10 +713,4 @@ class AuthViewModel(
     fun clearSyncResult() {
         _syncResult.value = null
     }
-
-    private val _syncInProgress = MutableStateFlow(false)
-    val syncInProgress: StateFlow<Boolean> = _syncInProgress.asStateFlow()
-
-    private val _syncResult = MutableStateFlow<Boolean?>(null)
-    val syncResult: StateFlow<Boolean?> = _syncResult.asStateFlow()
 }

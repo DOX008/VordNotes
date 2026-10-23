@@ -30,9 +30,6 @@ import com.mhss.app.domain.model.Note
 import com.mhss.app.ui.R
 import com.mhss.app.ui.theme.Orange
 import com.mhss.app.util.date.formatDateDependingOnDay
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
 
 @Composable
 fun NoteCard(
@@ -85,22 +82,10 @@ fun NoteCard(
                 )
             }
             Spacer(Modifier.height(8.dp))
-            Markdown(
-                content = note.content,
-                colors = markdownColor(
-                    linkText = Color.Blue
-                ),
-                typography = markdownTypography(
-                    text = MaterialTheme.typography.bodyMedium,
-                    h1 = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    h2 = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    h3 = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    h4 = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    h5 = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    h6 = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    code = MaterialTheme.typography.bodySmall,
-                    paragraph = MaterialTheme.typography.bodyMedium,
-                )
+            Text(
+                text = note.content,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(Modifier.height(8.dp))
             Text(

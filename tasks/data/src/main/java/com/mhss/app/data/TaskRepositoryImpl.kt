@@ -40,14 +40,13 @@ class TaskRepositoryImpl(
         taskDao.getTasksByTitle(title).flowOn(ioDispatcher).map { tasks -> tasks.map { it.toTask() } }
 
     override suspend fun insertTask(task: Task): Long {
-        val uid = auth.currentUser?.uid ?: return 0L
+        val uid = auth.currentUser?.uid
         val newId = withContext(ioDispatcher) {
             val id = taskDao.insertTask(task.toTaskEntity())
-            if (id != 0L) {
+            if (uid != null && id != 0L) {
                 val entity = task.toTaskEntity().copy(id = id.toInt())
                 UserDataPaths.tasksCollection(firestore, uid).document(entity.id.toString())
                     .set(toTaskDoc(entity))
-                    .await()
             }
             id
         }
@@ -56,21 +55,28 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun updateTask(task: Task) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             taskDao.updateTask(task.toTaskEntity())
-            if (task.id != 0) {
+            if (uid != null && task.id != 0) {
                 val entity = task.toTaskEntity()
                 UserDataPaths.tasksCollection(firestore, uid).document(entity.id.toString())
                     .set(toTaskDoc(entity))
-                    .await()
             }
         }
         notifyTasksWidget()
     }
 
     override suspend fun completeTask(id: Int, completed: Boolean) {
-        withContext(ioDispatcher) { taskDao.updateCompleted(id, completed) }
+        val uid = auth.currentUser?.uid
+        withContext(ioDispatcher) {
+            taskDao.updateCompleted(id, completed)
+            if (uid != null) {
+                val task = taskDao.getTask(id)
+                UserDataPaths.tasksCollection(firestore, uid).document(id.toString())
+                    .set(toTaskDoc(task))
+            }
+        }
         notifyTasksWidget()
     }
 
@@ -92,14 +98,13 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun deleteTask(task: Task) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val entity = task.toTaskEntity()
             taskDao.deleteTask(entity)
-            if (entity.id != 0) {
+            if (uid != null && entity.id != 0) {
                 UserDataPaths.tasksCollection(firestore, uid).document(entity.id.toString())
                     .delete()
-                    .await()
             }
         }
         notifyTasksWidget()

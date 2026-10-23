@@ -45,6 +45,7 @@ private fun TaskEntity.toTaskMap(): HashMap<String, Any?> = hashMapOf(
     "priority" to priority,
     "createdDate" to createdDate,
     "updatedDate" to updatedDate,
+    "lastFiredDate" to lastFiredDate,
     "subTasks" to subTasks.map { subTask ->
         hashMapOf(
             "id" to subTask.id.toString(),          // UUID som sträng – matchar hur vi läser
@@ -68,6 +69,7 @@ fun taskDocToEntity(data: Map<String, Any?>): TaskEntity {
         priority = (data["priority"] as? Number)?.toInt() ?: 0,
         createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
         updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
+        lastFiredDate = (data["lastFiredDate"] as? Number)?.toLong() ?: 0L,
         subTasks = (data["subTasks"] as? List<*>)?.mapNotNull { raw ->
             val map = raw as? Map<*, *> ?: return@mapNotNull null
             val idValue = map["id"] ?: return@mapNotNull null

@@ -5,7 +5,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.mhss.app.database.dao.BookmarkDao
 import com.mhss.app.database.entity.toBookmark
 import com.mhss.app.database.entity.toBookmarkEntity
-import com.mhss.app.database.remote.await
 import com.mhss.app.database.remote.toBookmarkDoc
 import com.mhss.app.domain.model.Bookmark
 import com.mhss.app.domain.repository.BookmarkRepository
@@ -36,41 +35,38 @@ class BookmarkRepositoryImpl(
         withContext(ioDispatcher) { bookmarkDao.getBookmark(query).map { it.toBookmark() } }
 
     override suspend fun addBookmark(bookmark: Bookmark): Long {
-        val uid = auth.currentUser?.uid ?: return 0L
+        val uid = auth.currentUser?.uid
         return withContext(ioDispatcher) {
             val newId = bookmarkDao.insertBookmark(bookmark.toBookmarkEntity())
-            if (newId != 0L) {
+            if (uid != null && newId != 0L) {
                 val entity = bookmark.toBookmarkEntity().copy(id = newId.toInt())
                 UserDataPaths.bookmarksCollection(firestore, uid).document(entity.id.toString())
                     .set(toBookmarkDoc(entity))
-                    .await()
             }
             newId
         }
     }
 
     override suspend fun deleteBookmark(bookmark: Bookmark) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val entity = bookmark.toBookmarkEntity()
             bookmarkDao.deleteBookmark(entity)
-            if (entity.id != 0) {
+            if (uid != null && entity.id != 0) {
                 UserDataPaths.bookmarksCollection(firestore, uid).document(entity.id.toString())
                     .delete()
-                    .await()
             }
         }
     }
 
     override suspend fun updateBookmark(bookmark: Bookmark) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             bookmarkDao.updateBookmark(bookmark.toBookmarkEntity())
-            if (bookmark.id != 0) {
+            if (uid != null && bookmark.id != 0) {
                 val entity = bookmark.toBookmarkEntity()
                 UserDataPaths.bookmarksCollection(firestore, uid).document(entity.id.toString())
                     .set(toBookmarkDoc(entity))
-                    .await()
             }
         }
     }

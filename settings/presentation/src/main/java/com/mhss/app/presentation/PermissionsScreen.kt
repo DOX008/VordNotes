@@ -59,7 +59,7 @@ fun PermissionsScreen() {
             // POST_NOTIFICATIONS (Android 13+)
             item {
                 SettingsSwitchCard(
-                    text = "Notifications",
+                    text = stringResource(R.string.notifications),
                     checked = notifPermission.isGranted,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) { checked ->
@@ -73,7 +73,7 @@ fun PermissionsScreen() {
             }
             item {
                 SettingsSwitchCard(
-                    text = "Camera",
+                    text = stringResource(R.string.settings_permission_camera),
                     checked = cameraPermission.isGranted,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) { checked ->
@@ -87,7 +87,7 @@ fun PermissionsScreen() {
             // Starta/stoppa foreground-service (utan direkt beroende till :app)
             item {
                 SettingsSwitchCard(
-                    text = "Always keep app alive",
+                    text = stringResource(R.string.always_keep_app_alive),
                     checked = isServiceRunning,
                 ) { checked ->
                     if (checked) {

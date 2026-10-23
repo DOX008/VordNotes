@@ -55,9 +55,11 @@ private val LightColorPalette = lightColorScheme(
 fun MyBrainTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     useDynamicColors: Boolean = false,
-    fontFamily: FontFamily = Rubik,
+    // Ändra från nimbussanl till NimbusSanL här:
+    fontFamily: FontFamily = NimbusSanL,
     fontSizeScale: Float = 1.0f,
     content: @Composable () -> Unit
+
 ) {
     val context = LocalContext.current
     val colors = if (useDynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

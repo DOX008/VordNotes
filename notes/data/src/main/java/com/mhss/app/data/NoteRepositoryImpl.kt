@@ -7,7 +7,6 @@ import com.mhss.app.database.entity.toNote
 import com.mhss.app.database.entity.toNoteEntity
 import com.mhss.app.database.entity.toNoteFolder
 import com.mhss.app.database.entity.toNoteFolderEntity
-import com.mhss.app.database.remote.await
 import com.mhss.app.database.remote.toFolderDoc
 import com.mhss.app.database.remote.toNoteDoc
 import com.mhss.app.domain.model.Note
@@ -47,80 +46,74 @@ class NoteRepositoryImpl(
             .map { notes -> notes.map { it.toNote() } }
 
     override suspend fun addNote(note: Note): Long {
-        val uid = auth.currentUser?.uid ?: return 0L
+        val uid = auth.currentUser?.uid
         return withContext(ioDispatcher) {
             val newId = noteDao.insertNote(note.toNoteEntity())
-            if (newId != 0L) {
+            if (uid != null && newId != 0L) {
                 val entity = note.toNoteEntity().copy(id = newId.toInt())
                 UserDataPaths.notesCollection(firestore, uid).document(entity.id.toString())
                     .set(toNoteDoc(entity))
-                    .await()
             }
             newId
         }
     }
 
     override suspend fun updateNote(note: Note) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             noteDao.updateNote(note.toNoteEntity())
-            if (note.id != 0) {
+            if (uid != null && note.id != 0) {
                 val entity = note.toNoteEntity()
                 UserDataPaths.notesCollection(firestore, uid).document(entity.id.toString())
                     .set(toNoteDoc(entity))
-                    .await()
             }
         }
     }
 
     override suspend fun deleteNote(note: Note) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val entity = note.toNoteEntity()
             noteDao.deleteNote(entity)
-            if (entity.id != 0) {
+            if (uid != null && entity.id != 0) {
                 UserDataPaths.notesCollection(firestore, uid).document(entity.id.toString())
                     .delete()
-                    .await()
             }
         }
     }
 
     override suspend fun insertNoteFolder(folder: NoteFolder) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val newId = noteDao.insertNoteFolder(folder.toNoteFolderEntity())
-            if (newId > 0L) {
+            if (uid != null && newId > 0L) {
                 val entity = folder.toNoteFolderEntity().copy(id = newId.toInt())
                 UserDataPaths.foldersCollection(firestore, uid).document(entity.id.toString())
                     .set(toFolderDoc(entity))
-                    .await()
             }
         }
     }
 
     override suspend fun updateNoteFolder(folder: NoteFolder) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             noteDao.updateNoteFolder(folder.toNoteFolderEntity())
-            if (folder.id != 0) {
+            if (uid != null && folder.id != 0) {
                 val entity = folder.toNoteFolderEntity()
                 UserDataPaths.foldersCollection(firestore, uid).document(entity.id.toString())
                     .set(toFolderDoc(entity))
-                    .await()
             }
         }
     }
 
     override suspend fun deleteNoteFolder(folder: NoteFolder) {
-        val uid = auth.currentUser?.uid ?: return
+        val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
             val entity = folder.toNoteFolderEntity()
             noteDao.deleteNoteFolder(entity)
-            if (entity.id != 0) {
+            if (uid != null && entity.id != 0) {
                 UserDataPaths.foldersCollection(firestore, uid).document(entity.id.toString())
                     .delete()
-                    .await()
             }
         }
     }

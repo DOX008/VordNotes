@@ -10,7 +10,7 @@ import com.mhss.app.ui.R
 
 // 1. Rubik betűcsalád (Regular és Bold változatokkal)
 val Rubik = FontFamily(
-    Font(R.font.rubik_regular),
+    Font(R.font.thyssen),
     Font(R.font.rubik_bold, FontWeight.Bold)
 )
 
@@ -26,7 +26,7 @@ val NimbusSanL = FontFamily(
 
 // 4. Thyssen betűcsalád
 val Thyssen = FontFamily(
-    Font(R.font.thyssen)
+    Font(R.font.rubik_regular)
 )
 
 // 5. Kurale Regular betűcsalád

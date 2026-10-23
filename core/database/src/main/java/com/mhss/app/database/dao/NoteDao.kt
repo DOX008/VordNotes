@@ -25,6 +25,9 @@ interface NoteDao {
     @Query("SELECT * FROM notes")
     suspend fun getAllNotes(): List<NoteEntity>
 
+    @Query("DELETE FROM notes")
+    suspend fun deleteAllNotes()
+
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getNote(id: Int): NoteEntity
 
@@ -83,6 +86,9 @@ interface NoteDao {
 
     @Query("SELECT * FROM note_folders")
     fun getAllNoteFolders(): Flow<List<NoteFolderEntity>>
+
+    @Query("DELETE FROM note_folders")
+    suspend fun deleteAllNoteFolders()
 
     @Query("SELECT * FROM note_folders WHERE id = :folderId")
     fun getNoteFolder(folderId: Int): NoteFolderEntity?
