@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mhss.app.domain.model.DiaryEntry
+import com.mhss.app.ui.R
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -84,6 +85,21 @@ fun LazyItemScope.DiaryEntryItem(
                 )
 
                 Spacer(Modifier.height(8.dp))
+            }
+
+            if (entry.images.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_attach),
+                        contentDescription = stringResource(R.string.diary_entry_images),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = entry.images.size.toString(),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))

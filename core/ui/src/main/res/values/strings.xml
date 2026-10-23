@@ -359,4 +359,8 @@
     <string name="settings_permission_camera">Camera</string>
     <string name="widget_toggle_completed_tasks">Toggle completed tasks</string>
     <string name="widget_refresh">Refresh</string>
+    <string name="diary_send_email">Send diary by email</string>
+    <string name="diary_email_subject">Diary entries</string>
+    <string name="diary_email_count">%1$d entries will be sent, each with its images.</string>
+    <string name="diary_entry_images">Images</string>
 </resources>

@@ -19,6 +19,23 @@ class EmailImageSupportTest {
     }
 
     @Test
+    fun diaryEmailRendersEveryEntryWithOwnImagesAndSeparator() {
+        val entries = listOf(
+            DiaryMailEntry("Anna <A>", "First\nentry", "Jan 1, 2026 10:00", "Good", "#4CAF50", emptyList()),
+            DiaryMailEntry("Bo", "", "Jan 2, 2026 11:00", "Okay", "bad", emptyList())
+        )
+
+        val html = buildDiaryEmailHtmlBody(entries, listOf(1, 2), "Image")
+
+        assertTrue(html.contains("Anna &lt;A&gt;"))
+        assertTrue(html.indexOf("Anna") < html.indexOf("cid:diary-0-0"))
+        assertTrue(html.indexOf("cid:diary-0-0") < html.indexOf("Jan 1, 2026"))
+        assertTrue(html.indexOf("<hr") < html.indexOf("Bo"))
+        assertTrue(html.contains("cid:diary-1-1"))
+        assertTrue(buildDiaryEmailTextBody(entries, listOf(1, 2)).contains(EMAIL_IMAGE_SEPARATOR))
+    }
+
+    @Test
     fun plainTextEmailKeepsNoteAndAddsImageSeparator() {
         val body = buildEmailTextBody("Note text", "Images are shown below.")
 

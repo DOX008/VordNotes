@@ -8,6 +8,7 @@ import com.mhss.app.database.remote.toDiaryDoc
 import com.mhss.app.domain.model.DiaryEntry
 import com.mhss.app.domain.repository.DiaryRepository
 import com.mhss.app.util.UserDataPaths
+import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -49,6 +50,9 @@ class DiaryRepositoryImpl(
     override suspend fun updateEntry(diary: DiaryEntry) {
         val uid = auth.currentUser?.uid
         withContext(ioDispatcher) {
+            val removed = runCatching { diaryDao.getEntry(diary.id).toDiaryEntry().images }
+                .getOrDefault(emptyList()) - diary.images.toSet()
+            deleteImageFiles(removed)
             diaryDao.updateEntry(diary.toDiaryEntryEntity())
             if (uid != null && diary.id != 0) {
                 val entity = diary.toDiaryEntryEntity()
@@ -63,10 +67,16 @@ class DiaryRepositoryImpl(
         withContext(ioDispatcher) {
             val entity = diary.toDiaryEntryEntity()
             diaryDao.deleteEntry(entity)
+            deleteImageFiles(diary.images)
             if (uid != null && entity.id != 0) {
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .delete()
             }
         }
+    }
+
+    // Rör bara filer i appens egen dagboksbildmapp
+    private fun deleteImageFiles(paths: List<String>) {
+        paths.map(::File).filter { it.parentFile?.name == "diary_images" }.forEach { it.delete() }
     }
 }

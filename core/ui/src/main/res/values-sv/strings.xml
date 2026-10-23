@@ -360,4 +360,8 @@
     <string name="settings_permission_camera">Kamera</string>
     <string name="widget_toggle_completed_tasks">Visa/dölj slutförda uppgifter</string>
     <string name="widget_refresh">Uppdatera</string>
+    <string name="diary_send_email">Skicka dagbok via e-post</string>
+    <string name="diary_email_subject">Dagboksanteckningar</string>
+    <string name="diary_email_count">%1$d anteckningar skickas, var och en med sina bilder.</string>
+    <string name="diary_entry_images">Bilder</string>
 </resources>

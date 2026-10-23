@@ -9,5 +9,6 @@ data class DiaryEntry(
     val createdDate: Long = 0L,
     val updatedDate: Long = 0L,
     val mood: Mood,
+    val images: List<String> = emptyList(),
     val id: Int = 0
 )
