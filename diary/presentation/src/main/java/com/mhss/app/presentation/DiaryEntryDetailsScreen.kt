@@ -3,6 +3,7 @@ package com.mhss.app.presentation
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -58,6 +59,7 @@ fun DiaryEntryDetailsScreen(
     var date by remember { mutableLongStateOf(now()) }
     var images by remember { mutableStateOf(emptyList<String>()) }
     var showEmailDialog by remember { mutableStateOf(false) }
+    var viewedImage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val readingMode = state.readingMode
     var showDateDialog by remember { mutableStateOf(false) }
@@ -191,6 +193,7 @@ fun DiaryEntryDetailsScreen(
                 .padding(horizontal = 12.dp)
                 .padding(paddingValues)
                 .imePadding()
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = stringResource(R.string.mood),
@@ -258,6 +261,7 @@ fun DiaryEntryDetailsScreen(
                 images.forEach { path ->
                     DiaryImageThumbnail(
                         path = path,
+                        onClick = { viewedImage = path },
                         onRemove = {
                             images = images - path
                             if (state.entry?.images?.contains(path) != true) {
@@ -290,7 +294,7 @@ fun DiaryEntryDetailsScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .heightIn(min = 240.dp)
                         .padding(vertical = 6.dp)
                         .padding(8.dp)
                 )
@@ -302,7 +306,7 @@ fun DiaryEntryDetailsScreen(
                     shape = RoundedCornerShape(15.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .heightIn(min = 240.dp)
                         .padding(bottom = 8.dp)
                 )
             }
@@ -313,6 +317,8 @@ fun DiaryEntryDetailsScreen(
             content = content,
             onContentChange = { content = it }
         )
+
+        viewedImage?.let { FullScreenImageDialog(it) { viewedImage = null } }
 
         if (showEmailDialog) {
             DiaryEmailDialog(

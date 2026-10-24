@@ -38,7 +38,7 @@ internal fun buildDiaryEmailHtmlBody(
 ): String {
     val blocks = entries.mapIndexed { entryIndex, entry ->
         val images = (0 until imageCounts.getOrElse(entryIndex) { 0 }).joinToString("\n") { imageIndex ->
-            """<img src="cid:${diaryImageContentId(entryIndex, imageIndex)}" alt="${imageAltTextPrefix.htmlEscape()} ${imageIndex + 1}" style="display:inline-block;vertical-align:top;width:160px;max-width:100%;height:auto;margin:4px 4px 4px 0;border-radius:8px;">"""
+            """<a href="cid:${diaryImageContentId(entryIndex, imageIndex)}"><img src="cid:${diaryImageContentId(entryIndex, imageIndex)}" alt="${imageAltTextPrefix.htmlEscape()} ${imageIndex + 1}" style="display:inline-block;vertical-align:top;width:96px;max-width:100%;height:auto;margin:4px 4px 4px 0;border-radius:8px;"></a>"""
         }
         val color = entry.moodColorHex.takeIf { it.matches(Regex("#[0-9A-Fa-f]{6}")) } ?: "#777777"
         val content = if (entry.content.isBlank()) "" else
