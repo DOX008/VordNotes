@@ -6,6 +6,7 @@ import com.mhss.app.database.entity.NoteEntity
 import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
 import com.mhss.app.database.entity.DiaryEntryEntity
+import com.mhss.app.database.entity.imageNames
 import com.benasher44.uuid.Uuid
 import com.mhss.app.domain.model.SubTask
 
@@ -107,7 +108,8 @@ private fun DiaryEntryEntity.toDiaryMap(): HashMap<String, Any?> = hashMapOf(
     "content" to content,
     "createdDate" to createdDate,
     "updatedDate" to updatedDate,
-    "mood" to mood,
+    "mood" to mood.ordinal,
+    "images" to imageNames(),
     "id" to id
 )
 

@@ -54,3 +54,6 @@ fun DiaryEntry.toDiaryEntryEntity() = DiaryEntryEntity(
 )
 
 fun List<DiaryEntryEntity>.withoutIds() = map { it.copy(id = 0) }
+/** Bildernas filnamn (utan sökväg) – det som synkas i Firestore-dokumentet. */
+fun DiaryEntryEntity.imageNames(): List<String> =
+    images.split(IMAGE_SEPARATOR).filter { it.isNotBlank() }.map { it.substringAfterLast('/') }
