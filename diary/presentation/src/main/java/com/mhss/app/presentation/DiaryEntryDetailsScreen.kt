@@ -58,6 +58,7 @@ fun DiaryEntryDetailsScreen(
     var date by remember { mutableLongStateOf(now()) }
     var images by remember { mutableStateOf(emptyList<String>()) }
     var showEmailDialog by remember { mutableStateOf(false) }
+    var viewedImage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val readingMode = state.readingMode
     var showDateDialog by remember { mutableStateOf(false) }
@@ -258,6 +259,7 @@ fun DiaryEntryDetailsScreen(
                 images.forEach { path ->
                     DiaryImageThumbnail(
                         path = path,
+                        onClick = { viewedImage = path },
                         onRemove = {
                             images = images - path
                             if (state.entry?.images?.contains(path) != true) {
@@ -313,6 +315,8 @@ fun DiaryEntryDetailsScreen(
             content = content,
             onContentChange = { content = it }
         )
+
+        viewedImage?.let { FullScreenImageDialog(it) { viewedImage = null } }
 
         if (showEmailDialog) {
             DiaryEmailDialog(
