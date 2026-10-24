@@ -159,6 +159,16 @@ fun DiaryEntryDetailsScreen(
                         )
                     }
                     IconButton(
+                        enabled = images.size < MAX_DIARY_ENTRY_IMAGE_COUNT,
+                        onClick = { imagePicker.launch("image/*") }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_attach),
+                            contentDescription = stringResource(R.string.add_images),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    IconButton(
                         enabled = title.isNotBlank() || content.isNotBlank(),
                         onClick = { showEmailDialog = true }
                     ) {
@@ -251,7 +261,7 @@ fun DiaryEntryDetailsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            Row(
+            if (images.isNotEmpty()) Row(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
@@ -269,19 +279,6 @@ fun DiaryEntryDetailsScreen(
                             }
                         }
                     )
-                }
-                if (images.size < MAX_DIARY_ENTRY_IMAGE_COUNT) {
-                    OutlinedButton(onClick = { imagePicker.launch("image/*") }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_attach),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.add_images),
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
                 }
             }
 

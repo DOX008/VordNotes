@@ -10,7 +10,7 @@ import com.mhss.app.ui.R
 
 // 1. Rubik betűcsalád (Regular és Bold változatokkal)
 val Rubik = FontFamily(
-    Font(R.font.thyssen),
+    Font(R.font.rubik_bold, FontWeight.Normal),
     Font(R.font.rubik_bold, FontWeight.Bold)
 )
 

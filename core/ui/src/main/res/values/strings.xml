@@ -53,7 +53,7 @@
         <item quantity="other">%d aktiva medicinlarm</item>
     </plurals>
 
-    <string name="sync_now">Sync/push new data up to the cloud</string>
+    <string name="sync_now">Sync all to cloud</string>
     <string name="sync_ok">Synced successfully</string>
     <string name="sync_failed">Sync failed</string>
     <string name="login">Login</string>
@@ -296,7 +296,7 @@
     <string name="ocr_processing">Processing…</string>
     <string name="take_photo">Take photo</string>
     <string name="close">Close</string>
-    <string name="register_account">Register new account for VordNotes</string>
+    <string name="register_account">Create new VordNotes accounts</string>
     <string name="register">Register</string>
     <string name="confirm_password">Confirm password</string>
     <string name="show_password">Show password</string>
@@ -334,7 +334,7 @@
 <string name="app_info_text">VordNote \nThis application is designed and created by Alexander Andreassen</string>
 <string name="app_edit_schedule_keywords">Edit Schedule words</string>
 <string name="app_schedule_keywords_label">Comma-separated words (e.g. Supervision, Camera)</string>
-<string name="app_resync_all">Delete all info locally / Re-sync online</string>
+<string name="app_resync_all">Delete all/ Re-sync online</string>
 <string name="app_medicine_badge_channel_name">Medicine badge</string>
 <string name="app_medicine_badge_channel_description">Shows app icon badge for active medicine alarms</string>
 <string name="app_tts_pause">Pause reading</string>
@@ -359,8 +359,8 @@
     <string name="settings_permission_camera">Camera</string>
     <string name="widget_toggle_completed_tasks">Toggle completed tasks</string>
     <string name="widget_refresh">Refresh</string>
-    <string name="diary_send_email">Send notes by email</string>
-    <string name="diary_email_subject">Clinical notes</string>
-    <string name="diary_email_count">%1$d entries will be sent.</string>
+    <string name="diary_send_email">Send diary by email</string>
+    <string name="diary_email_subject">Diary entries</string>
+    <string name="diary_email_count">%1$d entries will be sent, each with its images.</string>
     <string name="diary_entry_images">Images</string>
 </resources>

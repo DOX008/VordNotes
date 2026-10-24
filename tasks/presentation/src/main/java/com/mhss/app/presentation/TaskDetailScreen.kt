@@ -158,7 +158,15 @@ fun TaskDetailScreen(
             subTasks = subTasks,
             priorities = priorities,
             formattedDate = formattedDate,
-            onTitleChange = { title = it },
+            patientSuggestions = uiState.patientSuggestions,
+            onTitleChange = {
+                title = it
+                viewModel.searchPatients(it)
+            },
+            onPatientSelected = {
+                title = it
+                viewModel.clearPatientSuggestions()
+            },
             onDescriptionChange = { description = it },
             onPriorityChange = { priority = it },
             onDueDateExist = {

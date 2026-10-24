@@ -13,7 +13,12 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
+import java.util.TimeZone
+import java.util.UUID
 import javax.mail.*
 import javax.mail.internet.InternetAddress
 import javax.mail.internet.MimeBodyPart
@@ -48,7 +53,7 @@ object MailSender {
             }
             val session = smtpSession()
 
-            val message = MimeMessage(session).apply {
+            val message = anonymousMessage(session).apply {
                 setFrom(InternetAddress(FROM_EMAIL, "Vård & Omsorg", "UTF-8"))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail))
                 setSubject(subject, "UTF-8")
@@ -58,20 +63,21 @@ object MailSender {
                     val imageParts = imageUris.mapIndexed { index, uri ->
                         val metadata = imageMetadata[index]
                         val displayName = metadata.displayName
-                        val attachmentName = sanitizeEmailAttachmentFileName(displayName, index)
-                        val contentType =
-                            requireImageContentType(
-                                context.contentResolver.getType(uri),
-                                displayName ?: uri.lastPathSegment.orEmpty()
-                            )
-                        val compressedFile = prepareCompressedEmailImage(context, uri, contentType)
-                        if (compressedFile != null) compressedImageFiles.add(compressedFile)
+                        requireImageContentType(
+                            context.contentResolver.getType(uri),
+                            displayName ?: uri.lastPathSegment.orEmpty()
+                        )
+                        val clean = stripImageMetadata(
+                            { context.contentResolver.openInputStream(uri) },
+                            context.cacheDir
+                        )
+                        compressedImageFiles.add(clean.file)
+                        // Generiskt filnamn så originalnamnet (t.ex. IMG_datum) inte avslöjas
+                        val attachmentName = "image-${index + 1}.${clean.extension}"
                         val contentId = emailImageContentId(index)
                         MimeBodyPart().apply {
                             dataHandler = DataHandler(
-                                compressedFile?.let {
-                                    FileEmailImageDataSource(it, contentType, attachmentName)
-                                } ?: UriDataSource(context, uri, contentType, attachmentName)
+                                FileEmailImageDataSource(clean.file, clean.contentType, attachmentName)
                             )
                             fileName = attachmentName
                             disposition = MimeBodyPart.INLINE
@@ -113,6 +119,22 @@ object MailSender {
         }
     }
 
+    /** Meddelande utan X-Mailer, enhetens värdnamn i Message-ID eller lokal tidszon i Date. */
+    private fun anonymousMessage(session: Session): MimeMessage = object : MimeMessage(session) {
+        override fun updateMessageID() {
+            setHeader("Message-ID", "<${UUID.randomUUID()}@${FROM_EMAIL.substringAfter('@')}>")
+        }
+
+        override fun updateHeaders() {
+            super.updateHeaders()
+            removeHeader("X-Mailer")
+            removeHeader("User-Agent")
+            val format = SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss '+0000'", Locale.US)
+            format.timeZone = TimeZone.getTimeZone("UTC")
+            setHeader("Date", format.format(Date()))
+        }
+    }
+
     private fun smtpSession(): Session {
         // TLS/STARTTLS och TLS1.2 tvingas
         val props = Properties().apply {
@@ -131,11 +153,13 @@ object MailSender {
 
     /** Skickar flera dagboksinlägg i ett mejl, ett block per inlägg med egna bilder. */
     suspend fun sendDiaryMail(
+        context: Context,
         toEmail: String,
         subject: String,
         entries: List<DiaryMailEntry>,
         imageAltTextPrefix: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val cleanFiles = mutableListOf<File>()
         try {
             val imageFiles = entries.map { entry ->
                 entry.imagePaths.map(::File).filter { it.isFile }
@@ -143,18 +167,21 @@ object MailSender {
             if (imageFiles.sumOf { it.size } > MAX_DIARY_EMAIL_IMAGE_COUNT) {
                 throw EmailAttachmentException(EmailAttachmentLimit.TOO_MANY_IMAGES)
             }
-            val message = MimeMessage(smtpSession()).apply {
+            val message = anonymousMessage(smtpSession()).apply {
                 setFrom(InternetAddress(FROM_EMAIL, "Vård & Omsorg", "UTF-8"))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail))
                 setSubject(subject, "UTF-8")
                 val imageParts = imageFiles.flatMapIndexed { entryIndex, files ->
                     files.mapIndexed { imageIndex, file ->
-                        val contentType = requireImageContentType(null, file.name)
+                        // Skicka alltid en omkodad kopia utan metadata, även för äldre sparade bilder
+                        val clean = stripImageMetadata({ file.inputStream() }, context.cacheDir)
+                        cleanFiles.add(clean.file)
+                        val name = "image-${entryIndex + 1}-${imageIndex + 1}.${clean.extension}"
                         MimeBodyPart().apply {
                             dataHandler = DataHandler(
-                                FileEmailImageDataSource(file, contentType, file.name)
+                                FileEmailImageDataSource(clean.file, clean.contentType, name)
                             )
-                            fileName = sanitizeEmailAttachmentFileName(file.name, imageIndex)
+                            fileName = name
                             disposition = MimeBodyPart.INLINE
                             setHeader("Content-ID", "<${diaryImageContentId(entryIndex, imageIndex)}>")
                         }
@@ -171,6 +198,8 @@ object MailSender {
         } catch (e: Exception) {
             Log.e(TAG, "Diary email sending failed (${e.javaClass.simpleName})")
             Result.failure(e.findAttachmentLimitException() ?: e)
+        } finally {
+            cleanFiles.forEach { it.delete() }
         }
     }
 

@@ -12,6 +12,7 @@ import com.mhss.app.domain.use_case.DeleteNoteUseCase
 import com.mhss.app.domain.use_case.GetAllNoteFoldersUseCase
 import com.mhss.app.domain.use_case.GetNoteFolderUseCase
 import com.mhss.app.domain.use_case.GetNoteUseCase
+import com.mhss.app.domain.use_case.SearchNotesUseCase
 import com.mhss.app.domain.use_case.SendAiMessageUseCase
 import com.mhss.app.domain.use_case.UpdateNoteUseCase
 import com.mhss.app.preferences.domain.use_case.GetPreferenceUseCase
@@ -38,6 +39,7 @@ class NoteDetailsViewModel(
     private val getAllFolders: GetAllNoteFoldersUseCase,
     private val getNoteFolder: GetNoteFolderUseCase,
     private val sendAiPrompt: SendAiMessageUseCase,
+    private val searchNotesUseCase: SearchNotesUseCase,
     @Named("applicationScope") private val applicationScope: CoroutineScope,
     id: Int,
     folderId: Int,
@@ -50,6 +52,10 @@ class NoteDetailsViewModel(
         private set
     var content by mutableStateOf("")
         private set
+
+    var patientSuggestions by mutableStateOf<List<String>>(emptyList())
+        private set
+    private var patientSearchJob: Job? = null
 
     private var autoSaveJob: Job? = null
     private val debounceTime = 2000L
@@ -135,6 +141,32 @@ class NoteDetailsViewModel(
 
             NoteDetailsEvent.AiResultHandled -> aiActions.dismiss()
         }
+    }
+
+    fun searchPatients(query: String) {
+        patientSearchJob?.cancel()
+        val q = query.trim()
+        if (q.isEmpty()) {
+            patientSuggestions = emptyList()
+            return
+        }
+        patientSearchJob = viewModelScope.launch {
+            delay(150)
+            patientSuggestions = searchNotesUseCase(q)
+                .map { it.title.trim() }
+                .filter { it.isNotBlank() && !it.equals(q, ignoreCase = true) }
+                .distinct()
+                .sortedWith(
+                    compareByDescending<String> { it.startsWith(q, ignoreCase = true) }
+                        .thenBy { it.lowercase() }
+                )
+                .take(10)
+        }
+    }
+
+    fun clearPatientSuggestions() {
+        patientSearchJob?.cancel()
+        patientSuggestions = emptyList()
     }
 
     private fun saveNoteWithDebounce() {

@@ -1,5 +1,6 @@
 package com.mhss.app.data
 
+import android.content.Context
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.mhss.app.database.dao.DiaryDao
@@ -22,6 +23,7 @@ import org.koin.core.annotation.Single
 
 @Single
 class DiaryRepositoryImpl(
+    private val context: Context,
     private val diaryDao: DiaryDao,
     @Named("ioDispatcher") private val ioDispatcher: CoroutineDispatcher,
     @Named("applicationScope") private val applicationScope: CoroutineScope,
@@ -47,7 +49,7 @@ class DiaryRepositoryImpl(
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .set(toDiaryDoc(entity))
                 applicationScope.launch(ioDispatcher) {
-                    DiaryImageSync.upload(firestore, uid, entity.id, diary.images)
+                    DiaryImageSync.upload(context, firestore, uid, entity.id, diary.images)
                 }
             }
             newId
@@ -71,7 +73,7 @@ class DiaryRepositoryImpl(
                 UserDataPaths.diaryCollection(firestore, uid).document(entity.id.toString())
                     .set(toDiaryDoc(entity))
                 applicationScope.launch(ioDispatcher) {
-                    DiaryImageSync.upload(firestore, uid, entity.id, diary.images)
+                    DiaryImageSync.upload(context, firestore, uid, entity.id, diary.images)
                 }
             }
         }

@@ -83,6 +83,7 @@ import com.mhss.app.ui.components.notes.NotePinsRow
 
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteDetailsScreen(
     navController: NavHostController,
@@ -291,13 +292,44 @@ fun NoteDetailsScreen(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
         ) {
-            OutlinedTextField(
-                value = title,
-                onValueChange = { viewModel.onEvent(NoteDetailsEvent.UpdateTitle(it)) },
-                label = { Text(text = stringResource(R.string.title)) },
-                shape = RoundedCornerShape(15.dp),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            var patientMenuOpen by remember { mutableStateOf(false) }
+            val showPatientMenu = patientMenuOpen && viewModel.patientSuggestions.isNotEmpty()
+            ExposedDropdownMenuBox(
+                expanded = showPatientMenu,
+                onExpandedChange = {
+                    patientMenuOpen = it && viewModel.patientSuggestions.isNotEmpty()
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = {
+                        viewModel.onEvent(NoteDetailsEvent.UpdateTitle(it))
+                        patientMenuOpen = it.isNotBlank()
+                        viewModel.searchPatients(it)
+                    },
+                    label = { Text(text = stringResource(R.string.title)) },
+                    shape = RoundedCornerShape(15.dp),
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = showPatientMenu,
+                    onDismissRequest = { patientMenuOpen = false }
+                ) {
+                    viewModel.patientSuggestions.forEach { suggestion ->
+                        DropdownMenuItem(
+                            text = { Text(suggestion) },
+                            onClick = {
+                                viewModel.onEvent(NoteDetailsEvent.UpdateTitle(suggestion))
+                                patientMenuOpen = false
+                                viewModel.clearPatientSuggestions()
+                            }
+                        )
+                    }
+                }
+            }
             if (selectedPins.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 NotePinsRow(
@@ -498,5 +530,4 @@ private fun String.countWords(): Int {
     }
 
     return count
-
 }

@@ -8,9 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.mhss.app.domain.model.Task
 import com.mhss.app.domain.use_case.DeleteTaskUseCase
 import com.mhss.app.domain.use_case.GetTaskByIdUseCase
+import com.mhss.app.domain.use_case.SearchNotesUseCase
 import com.mhss.app.domain.use_case.UpdateTaskUseCase
 import com.mhss.app.util.date.now
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.annotation.KoinViewModel
 import org.koin.core.annotation.Named
@@ -20,18 +23,20 @@ class TaskDetailsViewModel(
     private val getTask: GetTaskByIdUseCase,
     private val updateTask: UpdateTaskUseCase,
     private val deleteTask: DeleteTaskUseCase,
+    private val searchNotesUseCase: SearchNotesUseCase,
     @Named("applicationScope") private val applicationScope: CoroutineScope,
     taskId: Int
 ) : ViewModel() {
 
     var taskDetailsUiState by mutableStateOf(TaskDetailsUiState())
         private set
+    private var patientSearchJob: Job? = null
 
     init {
         viewModelScope.launch {
             val task = getTask(taskId)
             taskDetailsUiState = taskDetailsUiState.copy(
-               task = task
+                task = task
             )
         }
     }
@@ -80,11 +85,39 @@ class TaskDetailsViewModel(
         }
     }
 
+    fun searchPatients(query: String) {
+        patientSearchJob?.cancel()
+        val q = query.trim()
+        if (q.isEmpty()) {
+            taskDetailsUiState = taskDetailsUiState.copy(patientSuggestions = emptyList())
+            return
+        }
+        patientSearchJob = viewModelScope.launch {
+            delay(150)
+            val suggestions = searchNotesUseCase(q)
+                .map { it.title.trim() }
+                .filter { it.isNotBlank() && !it.equals(q, ignoreCase = true) }
+                .distinct()
+                .sortedWith(
+                    compareByDescending<String> { it.startsWith(q, ignoreCase = true) }
+                        .thenBy { it.lowercase() }
+                )
+                .take(10)
+            taskDetailsUiState = taskDetailsUiState.copy(patientSuggestions = suggestions)
+        }
+    }
+
+    fun clearPatientSuggestions() {
+        patientSearchJob?.cancel()
+        taskDetailsUiState = taskDetailsUiState.copy(patientSuggestions = emptyList())
+    }
+
     data class TaskDetailsUiState(
         val task: Task? = null,
         val navigateUp: Boolean = false,
         val error: Int? = null,
         val errorAlarm: Boolean = false,
+        val patientSuggestions: List<String> = emptyList(),
     )
 
     private fun taskChanged(

@@ -54,7 +54,7 @@
         <item quantity="other">%d aktiva medicinlarm</item>
     </plurals>
 
-    <string name="sync_now">Sync/push nya data till molnetSync/push new data up to the cloud</string>
+    <string name="sync_now">Sync all data till målet</string>
     <string name="sync_ok">Synced successfully</string>
     <string name="sync_failed">Sync failed</string>
     <string name="login">Login</string>
@@ -297,7 +297,7 @@
     <string name="ocr_processing">Bearbetar…</string>
     <string name="take_photo">Ta foto</string>
     <string name="close">Stäng</string>
-    <string name="register_account">Registrera nytt konto för VordNotes</string>
+    <string name="register_account">Skapa nytt VordNotes konto</string>
     <string name="register">Registrera</string>
     <string name="confirm_password">Bekräfta lösenord</string>
     <string name="show_password">Visa lösenord</string>
@@ -335,7 +335,7 @@
 <string name="app_info_text">VordNote \nDen här applikationen är designad och skapad av Alexander Andreassen</string>
 <string name="app_edit_schedule_keywords">Redigera Schedule-ord</string>
 <string name="app_schedule_keywords_label">Kommaseparerade ord (t.ex. Tillsyn, Kamera)</string>
-<string name="app_resync_all">Radera allt lokalt/ Synca ned på nytt</string>
+<string name="app_resync_all">Radera och/ Synca ned på nytt</string>
 <string name="app_medicine_badge_channel_name">Medicinmärke</string>
 <string name="app_medicine_badge_channel_description">Visar märke på appikonen för aktiva medicinlarm</string>
 <string name="app_tts_pause">Pausa uppläsning</string>
@@ -360,8 +360,8 @@
     <string name="settings_permission_camera">Kamera</string>
     <string name="widget_toggle_completed_tasks">Visa/dölj slutförda uppgifter</string>
     <string name="widget_refresh">Uppdatera</string>
-    <string name="diary_send_email">Skicka anteckning via e-post</string>
-    <string name="diary_email_subject">Journalanteckningar</string>
-    <string name="diary_email_count">%1$d anteckningar skickas.</string>
+    <string name="diary_send_email">Skicka dagbok via e-post</string>
+    <string name="diary_email_subject">Dagboksanteckningar</string>
+    <string name="diary_email_count">%1$d anteckningar skickas, var och en med sina bilder.</string>
     <string name="diary_entry_images">Bilder</string>
 </resources>
