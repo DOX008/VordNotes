@@ -64,7 +64,8 @@ class UserDatabaseManager(
                     com.mhss.app.database.migrations.MIGRATION_4_5,
                     com.mhss.app.database.migrations.MIGRATION_5_6,
                     com.mhss.app.database.migrations.MIGRATION_6_7,
-                    com.mhss.app.database.migrations.MIGRATION_7_8
+                    com.mhss.app.database.migrations.MIGRATION_7_8,
+                    com.mhss.app.database.migrations.MIGRATION_8_9
                 )
                 .fallbackToDestructiveMigration()
                 .build()

@@ -8,6 +8,8 @@ import com.mhss.app.domain.model.DiaryEntry
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+private const val IMAGE_SEPARATOR = "\n"
+
 @Entity(tableName = "diary")
 @Serializable
 data class DiaryEntryEntity(
@@ -23,6 +25,9 @@ data class DiaryEntryEntity(
     val updatedDate: Long = 0L,
     @SerialName("mood")
     val mood: Mood,
+    @SerialName("images")
+    @ColumnInfo(name = "images", defaultValue = "''")
+    val images: String = "",
     @SerialName("id")
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0
@@ -34,6 +39,7 @@ fun DiaryEntryEntity.toDiaryEntry() = DiaryEntry(
     createdDate = createdDate,
     updatedDate = updatedDate,
     mood = mood,
+    images = images.split(IMAGE_SEPARATOR).filter { it.isNotBlank() },
     id = id
 )
 
@@ -43,7 +49,11 @@ fun DiaryEntry.toDiaryEntryEntity() = DiaryEntryEntity(
     createdDate = createdDate,
     updatedDate = updatedDate,
     mood = mood,
+    images = images.joinToString(IMAGE_SEPARATOR),
     id = id
 )
 
 fun List<DiaryEntryEntity>.withoutIds() = map { it.copy(id = 0) }
+/** Bildernas filnamn (utan sökväg) – det som synkas i Firestore-dokumentet. */
+fun DiaryEntryEntity.imageNames(): List<String> =
+    images.split(IMAGE_SEPARATOR).filter { it.isNotBlank() }.map { it.substringAfterLast('/') }

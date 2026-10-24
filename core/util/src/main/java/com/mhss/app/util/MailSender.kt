@@ -46,20 +46,7 @@ object MailSender {
             } else {
                 emptyList()
             }
-            // TLS/STARTTLS och TLS1.2 tvingas
-            val props = Properties().apply {
-                put("mail.smtp.auth", "true")
-                put("mail.smtp.starttls.enable", "true")
-                put("mail.smtp.starttls.required", "true")
-                put("mail.smtp.ssl.protocols", "TLSv1.2")
-                put("mail.smtp.host", SMTP_HOST)
-                put("mail.smtp.port", SMTP_PORT)
-            }
-
-            val session = Session.getInstance(props, object : Authenticator() {
-                override fun getPasswordAuthentication(): PasswordAuthentication =
-                    PasswordAuthentication(FROM_EMAIL, APP_PASSWORD)
-            })
+            val session = smtpSession()
 
             val message = MimeMessage(session).apply {
                 setFrom(InternetAddress(FROM_EMAIL, "Vård & Omsorg", "UTF-8"))
@@ -123,6 +110,67 @@ object MailSender {
             Result.failure(e.findAttachmentLimitException() ?: e)
         } finally {
             compressedImageFiles.forEach { it.delete() }
+        }
+    }
+
+    private fun smtpSession(): Session {
+        // TLS/STARTTLS och TLS1.2 tvingas
+        val props = Properties().apply {
+            put("mail.smtp.auth", "true")
+            put("mail.smtp.starttls.enable", "true")
+            put("mail.smtp.starttls.required", "true")
+            put("mail.smtp.ssl.protocols", "TLSv1.2")
+            put("mail.smtp.host", SMTP_HOST)
+            put("mail.smtp.port", SMTP_PORT)
+        }
+        return Session.getInstance(props, object : Authenticator() {
+            override fun getPasswordAuthentication(): PasswordAuthentication =
+                PasswordAuthentication(FROM_EMAIL, APP_PASSWORD)
+        })
+    }
+
+    /** Skickar flera dagboksinlägg i ett mejl, ett block per inlägg med egna bilder. */
+    suspend fun sendDiaryMail(
+        toEmail: String,
+        subject: String,
+        entries: List<DiaryMailEntry>,
+        imageAltTextPrefix: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val imageFiles = entries.map { entry ->
+                entry.imagePaths.map(::File).filter { it.isFile }
+            }
+            if (imageFiles.sumOf { it.size } > MAX_DIARY_EMAIL_IMAGE_COUNT) {
+                throw EmailAttachmentException(EmailAttachmentLimit.TOO_MANY_IMAGES)
+            }
+            val message = MimeMessage(smtpSession()).apply {
+                setFrom(InternetAddress(FROM_EMAIL, "Vård & Omsorg", "UTF-8"))
+                setRecipients(Message.RecipientType.TO, InternetAddress.parse(toEmail))
+                setSubject(subject, "UTF-8")
+                val imageParts = imageFiles.flatMapIndexed { entryIndex, files ->
+                    files.mapIndexed { imageIndex, file ->
+                        val contentType = requireImageContentType(null, file.name)
+                        MimeBodyPart().apply {
+                            dataHandler = DataHandler(
+                                FileEmailImageDataSource(file, contentType, file.name)
+                            )
+                            fileName = sanitizeEmailAttachmentFileName(file.name, imageIndex)
+                            disposition = MimeBodyPart.INLINE
+                            setHeader("Content-ID", "<${diaryImageContentId(entryIndex, imageIndex)}>")
+                        }
+                    }
+                }
+                setContent(buildDiaryEmailMultipart(entries, imageFiles.map { it.size }, imageAltTextPrefix, imageParts))
+            }
+            Transport.send(message)
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AuthenticationFailedException) {
+            Result.failure(IllegalStateException("Autentisering misslyckades mot SMTP (kontrollera app-lösenordet).", e))
+        } catch (e: Exception) {
+            Log.e(TAG, "Diary email sending failed (${e.javaClass.simpleName})")
+            Result.failure(e.findAttachmentLimitException() ?: e)
         }
     }
 

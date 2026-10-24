@@ -20,6 +20,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.mhss.app.database.UserDatabaseManager
 import com.mhss.app.database.entity.BookmarkEntity
 import com.mhss.app.database.entity.DiaryEntryEntity
+import com.mhss.app.database.entity.imageNames
+import com.mhss.app.util.DiaryImageSync
 import com.mhss.app.database.entity.NoteEntity
 import com.mhss.app.database.entity.NoteFolderEntity
 import com.mhss.app.database.entity.TaskEntity
@@ -354,6 +356,13 @@ class AuthViewModel(
                         batch.commit().await()
                     }
 
+                    diary.filter { it.id != 0 }.forEach { d ->
+                        DiaryImageSync.upload(
+                            firestore, user.uid, d.id,
+                            d.images.split("\n").filter { it.isNotBlank() }
+                        )
+                    }
+
                     val meta = hashMapOf(
                         "device" to Build.MODEL,
                         "lastSync" to FieldValue.serverTimestamp()
@@ -486,13 +495,19 @@ class AuthViewModel(
                                 is String -> runCatching { com.mhss.app.domain.model.Mood.valueOf(mv) }.getOrNull()
                                 else -> null
                             } ?: com.mhss.app.domain.model.Mood.values().first()
+                            val entryId = (data["id"] as? Number)?.toInt() ?: 0
+                            val imageNames = (data["images"] as? List<*>)?.filterIsInstance<String>().orEmpty()
+                            val imagePaths = if (entryId != 0 && imageNames.isNotEmpty()) {
+                                DiaryImageSync.download(app, firestore, user.uid, entryId, imageNames)
+                            } else emptyList()
                             DiaryEntryEntity(
                                 title = data["title"] as? String ?: "",
                                 content = data["content"] as? String ?: "",
                                 createdDate = (data["createdDate"] as? Number)?.toLong() ?: 0L,
                                 updatedDate = (data["updatedDate"] as? Number)?.toLong() ?: 0L,
                                 mood = mood,
-                                id = (data["id"] as? Number)?.toInt() ?: 0
+                                images = imagePaths.joinToString("\n"),
+                                id = entryId
                             )
                         }
                         if (entries.isNotEmpty()) userDiaryDao.insertEntries(entries)
@@ -689,6 +704,7 @@ class AuthViewModel(
         "createdDate" to createdDate,
         "updatedDate" to updatedDate,
         "mood" to mood.ordinal,
+        "images" to imageNames(),
         "id" to id
     )
 

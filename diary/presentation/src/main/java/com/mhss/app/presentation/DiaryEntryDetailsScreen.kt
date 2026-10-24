@@ -1,6 +1,9 @@
 package com.mhss.app.presentation
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -28,7 +31,11 @@ import com.mhss.app.ui.R
 import com.mhss.app.ui.components.common.DateTimeDialog
 import com.mhss.app.ui.components.common.MyBrainAppBar
 import com.mhss.app.ui.components.common.TTSSpeakerIcon
+import com.mhss.app.util.DiaryImageStorage
+import com.mhss.app.util.MAX_DIARY_ENTRY_IMAGE_COUNT
 import com.mhss.app.util.date.fullDate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import com.mhss.app.util.date.now
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -50,6 +57,10 @@ fun DiaryEntryDetailsScreen(
     var content by remember { mutableStateOf("") }
     var mood by remember { mutableStateOf(Mood.OKAY) }
     var date by remember { mutableLongStateOf(now()) }
+    var images by remember { mutableStateOf(emptyList<String>()) }
+    var showEmailDialog by remember { mutableStateOf(false) }
+    var viewedImage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val readingMode = state.readingMode
     var showDateDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -65,12 +76,36 @@ fun DiaryEntryDetailsScreen(
         onContentChange = { content = it }
     )
 
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        scope.launch {
+            val room = (MAX_DIARY_ENTRY_IMAGE_COUNT - images.size).coerceAtLeast(0)
+            val imported = uris.take(room).mapNotNull { uri ->
+                try {
+                    DiaryImageStorage.importImage(context, uri)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            images = images + imported
+            if (uris.size > room) {
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.email_too_many_images, MAX_DIARY_ENTRY_IMAGE_COUNT)
+                )
+            }
+        }
+    }
+
     LaunchedEffect(state.entry) {
         if (state.entry != null) {
             title = state.entry.title
             content = state.entry.content
             date = state.entry.createdDate
             mood = state.entry.mood
+            images = state.entry.images
         }
     }
 
@@ -91,6 +126,7 @@ fun DiaryEntryDetailsScreen(
                         title = title,
                         content = content,
                         mood = mood,
+                        images = images,
                         createdDate = date
                     )
                 )
@@ -122,6 +158,16 @@ fun DiaryEntryDetailsScreen(
                             tint = if (readingMode) Color.Green else Color.Gray
                         )
                     }
+                    IconButton(
+                        enabled = title.isNotBlank() || content.isNotBlank(),
+                        onClick = { showEmailDialog = true }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_send),
+                            contentDescription = stringResource(R.string.diary_send_email),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                     if (state.entry != null) {
                         IconButton(onClick = { openDialog = true }) {
                             Icon(
@@ -147,6 +193,7 @@ fun DiaryEntryDetailsScreen(
                 .padding(horizontal = 12.dp)
                 .padding(paddingValues)
                 .imePadding()
+                .verticalScroll(rememberScrollState())
         ) {
             Text(
                 text = stringResource(R.string.mood),
@@ -204,6 +251,42 @@ fun DiaryEntryDetailsScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                images.forEach { path ->
+                    DiaryImageThumbnail(
+                        path = path,
+                        onClick = { viewedImage = path },
+                        onRemove = {
+                            images = images - path
+                            if (state.entry?.images?.contains(path) != true) {
+                                scope.launch { DiaryImageStorage.delete(context, listOf(path)) }
+                            }
+                        }
+                    )
+                }
+                if (images.size < MAX_DIARY_ENTRY_IMAGE_COUNT) {
+                    OutlinedButton(onClick = { imagePicker.launch("image/*") }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_attach),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.add_images),
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
             if (readingMode) {
                 Text(
                     text = content,
@@ -211,7 +294,7 @@ fun DiaryEntryDetailsScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .heightIn(min = 240.dp)
                         .padding(vertical = 6.dp)
                         .padding(8.dp)
                 )
@@ -223,7 +306,7 @@ fun DiaryEntryDetailsScreen(
                     shape = RoundedCornerShape(15.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .heightIn(min = 240.dp)
                         .padding(bottom = 8.dp)
                 )
             }
@@ -234,6 +317,23 @@ fun DiaryEntryDetailsScreen(
             content = content,
             onContentChange = { content = it }
         )
+
+        viewedImage?.let { FullScreenImageDialog(it) { viewedImage = null } }
+
+        if (showEmailDialog) {
+            DiaryEmailDialog(
+                entries = listOf(
+                    DiaryEntry(
+                        title = title,
+                        content = content,
+                        mood = mood,
+                        images = images,
+                        createdDate = date
+                    )
+                ),
+                onDismiss = { showEmailDialog = false }
+            )
+        }
 
         if (showDateDialog) {
             DateTimeDialog(

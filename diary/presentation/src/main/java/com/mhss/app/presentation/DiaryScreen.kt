@@ -42,6 +42,7 @@ fun DiaryScreen(
     var orderSettingsVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var playingEntryId by remember { mutableStateOf<Int?>(null) }
+    var showEmailDialog by remember { mutableStateOf(false) }
     val navBackStackEntry = navController.currentBackStackEntry
     LaunchedEffect(navBackStackEntry) {
         val updated = navBackStackEntry
@@ -60,6 +61,16 @@ fun DiaryScreen(
             MyBrainAppBar(
                 title = stringResource(R.string.diary),
                 actions = {
+                    IconButton(
+                        enabled = uiState.entries.isNotEmpty(),
+                        onClick = { showEmailDialog = true }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_send),
+                            contentDescription = stringResource(R.string.diary_send_email),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                     IconButton(onClick = {
                         navController.navigate(Screen.DiaryChartScreen)
                     }) {
@@ -88,6 +99,12 @@ fun DiaryScreen(
             }
         }
     ) { paddingValues ->
+        if (showEmailDialog) {
+            DiaryEmailDialog(
+                entries = uiState.entries.values.flatten(),
+                onDismiss = { showEmailDialog = false }
+            )
+        }
         Column(Modifier.padding(paddingValues)) {
             Row(
                 Modifier.fillMaxWidth(),
