@@ -35,30 +35,39 @@ object DiaryImageSync {
 
     fun imageDirectory(context: Context): File = File(context.filesDir, DIRECTORY).apply { mkdirs() }
 
-    private fun readBytes(file: File): ByteArray? {
-        val raw = file.readBytes()
-        if (raw.size <= MAX_BYTES) return raw
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.path, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var longSide = 1600
-        while (longSide >= 400) {
-            var sample = 1
-            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= longSide) sample *= 2
-            val bitmap = BitmapFactory.decodeFile(
-                file.path, BitmapFactory.Options().apply { inSampleSize = sample }
-            ) ?: return null
-            val out = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
-            bitmap.recycle()
-            if (out.size() <= MAX_BYTES) return out.toByteArray()
-            longSide = (longSide * 0.75).toInt()
+    private fun readBytes(context: Context, file: File): ByteArray? {
+        val clean = try {
+            stripImageMetadata({ file.inputStream() }, context.cacheDir)
+        } catch (_: Exception) {
+            return null
         }
-        return null
+        try {
+            val raw = clean.file.readBytes()
+            if (raw.size <= MAX_BYTES) return raw
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(clean.file.path, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+            var longSide = 1600
+            while (longSide >= 400) {
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= longSide) sample *= 2
+                val bitmap = BitmapFactory.decodeFile(
+                    clean.file.path, BitmapFactory.Options().apply { inSampleSize = sample }
+                ) ?: return null
+                val out = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                bitmap.recycle()
+                if (out.size() <= MAX_BYTES) return out.toByteArray()
+                longSide = (longSide * 0.75).toInt()
+            }
+            return null
+        } finally {
+            clean.file.delete()
+        }
     }
 
     /** Laddar upp bilder som inte redan finns i molnet. Fel loggas men kastas inte. */
-    suspend fun upload(firestore: FirebaseFirestore, uid: String, entryId: Int, paths: Collection<String>) {
+    suspend fun upload(context: Context, firestore: FirebaseFirestore, uid: String, entryId: Int, paths: Collection<String>) {
         if (entryId == 0) return
         withContext(Dispatchers.IO) {
             paths.map(::File).filter { it.isFile }.forEach { file ->
@@ -66,7 +75,7 @@ object DiaryImageSync {
                     val doc = imagesCollection(firestore, uid, entryId).document(file.name)
                     val exists = try { doc.get().awaitResult().exists() } catch (e: CancellationException) { throw e } catch (_: Exception) { false }
                     if (exists) return@forEach
-                    val bytes = readBytes(file) ?: return@forEach
+                    val bytes = readBytes(context, file) ?: return@forEach
                     doc.set(
                         hashMapOf(
                             "name" to file.name,

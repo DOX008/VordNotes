@@ -19,25 +19,14 @@ object DiaryImageStorage {
      */
     suspend fun importImage(context: Context, uri: Uri): String = withContext(Dispatchers.IO) {
         val displayName = getUriDisplayName(context, uri) ?: uri.lastPathSegment.orEmpty()
-        val contentType = requireImageContentType(context.contentResolver.getType(uri), displayName)
+        requireImageContentType(context.contentResolver.getType(uri), displayName)
         val directory = File(context.filesDir, DIRECTORY).apply { mkdirs() }
-        val compressed = prepareCompressedEmailImage(context, uri, contentType)
-        val extension = when (contentType) {
-            "image/jpeg" -> "jpg"
-            "image/png" -> "png"
-            else -> contentType.substringAfter('/').filter { it.isLetterOrDigit() }.ifEmpty { "img" }
-        }
-        val target = File(directory, "${UUID.randomUUID()}.$extension")
-        if (compressed != null) {
-            try {
-                compressed.inputStream().use { input -> target.outputStream().use { input.copyTo(it) } }
-            } finally {
-                compressed.delete()
-            }
-        } else {
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw java.io.FileNotFoundException("Unable to open image: $displayName")
-            input.use { source -> target.outputStream().use { source.copyTo(it) } }
+        val clean = stripImageMetadata({ context.contentResolver.openInputStream(uri) }, context.cacheDir)
+        val target = File(directory, "${UUID.randomUUID()}.${clean.extension}")
+        try {
+            clean.file.inputStream().use { input -> target.outputStream().use { input.copyTo(it) } }
+        } finally {
+            clean.file.delete()
         }
         target.absolutePath
     }

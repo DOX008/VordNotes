@@ -96,6 +96,7 @@ fun DiaryEmailDialog(
                         resultMessage = null
                         scope.launch {
                             val result = MailSender.sendDiaryMail(
+                                context = context,
                                 toEmail = email.trim(),
                                 subject = context.getString(R.string.diary_email_subject),
                                 entries = entries.map { it.toMailEntry(context) },

@@ -1,85 +1,69 @@
 package com.mhss.app.util
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
+import java.io.InputStream
 
 private const val MAX_EMAIL_IMAGE_DIMENSION = 1600
 private const val EMAIL_JPEG_QUALITY = 82
 
-internal fun prepareCompressedEmailImage(
-    context: Context,
-    uri: Uri,
-    contentType: String
-): File? {
-    val outputFormat = when (contentType) {
-        "image/jpeg" -> Bitmap.CompressFormat.JPEG
-        "image/png" -> Bitmap.CompressFormat.PNG
-        else -> return null
-    }
-    val extension = if (outputFormat == Bitmap.CompressFormat.JPEG) ".jpg" else ".png"
+internal class CleanImage(val file: File, val contentType: String) {
+    val extension: String get() = if (contentType == "image/png") "png" else "jpg"
+}
+
+/**
+ * Avkodar bilden och kodar om den till en ny fil. Ingen EXIF, GPS, kameramodell, tidsstämplar eller
+ * andra metadata följer med eftersom bara pixlarna skrivs. Rotation appliceras på pixlarna först.
+ * Kastar [EmailAttachmentException] om bilden inte kan avkodas, så originalet skickas aldrig.
+ */
+internal fun stripImageMetadata(openInput: () -> InputStream?, cacheDir: File): CleanImage {
     var outputFile: File? = null
     var decoded: Bitmap? = null
     var oriented: Bitmap? = null
-    return try {
+    try {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, bounds)
-        } ?: return null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        openInput()?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw EmailAttachmentException(EmailAttachmentLimit.UNSUPPORTED_IMAGE)
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = calculateSampleSize(bounds.outWidth, bounds.outHeight)
+        }
+        decoded = openInput()?.use { BitmapFactory.decodeStream(it, null, options) }
+            ?: throw EmailAttachmentException(EmailAttachmentLimit.UNSUPPORTED_IMAGE)
 
-        val sampleSize = calculateSampleSize(bounds.outWidth, bounds.outHeight)
-        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        decoded = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        } ?: return null
-
-        val orientation = context.contentResolver.openInputStream(uri)?.use {
-            ExifInterface(it).getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL
-            )
-        } ?: ExifInterface.ORIENTATION_NORMAL
+        val orientation = try {
+            openInput()?.use {
+                ExifInterface(it).getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL
+                )
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (_: Exception) {
+            ExifInterface.ORIENTATION_NORMAL
+        }
         val matrix = orientationMatrix(orientation)
         val bitmap = if (matrix == null) decoded!! else {
             Bitmap.createBitmap(decoded!!, 0, 0, decoded!!.width, decoded!!.height, matrix, true)
                 .also { if (it !== decoded) oriented = it }
         }
-        outputFile = File.createTempFile("email-image-", extension, context.cacheDir)
-        val compressed = outputFile!!.outputStream().buffered().use { output ->
-            bitmap.compress(outputFormat, EMAIL_JPEG_QUALITY, output)
-        }
-        val sourceSize = context.contentResolver.query(
-            uri,
-            arrayOf(android.provider.OpenableColumns.SIZE),
-            null,
-            null,
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
-                if (index >= 0 && !cursor.isNull(index)) {
-                    cursor.getLong(index).takeIf { it > 0L }
-                } else {
-                    null
-                }
-            } else {
-                null
-            }
-        }
-        if (compressed && (sourceSize == null || outputFile!!.length() < sourceSize)) {
-            outputFile
-        } else {
-            outputFile!!.delete()
-            null
-        }
-    } catch (_: Exception) {
+        // PNG behåller transparens; allt annat blir JPEG
+        val usePng = bounds.outMimeType == "image/png" && bitmap.hasAlpha()
+        val format = if (usePng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+        val clean = CleanImage(
+            File.createTempFile("clean-image-", if (usePng) ".png" else ".jpg", cacheDir)
+                .also { outputFile = it },
+            if (usePng) "image/png" else "image/jpeg"
+        )
+        val ok = clean.file.outputStream().buffered().use { bitmap.compress(format, EMAIL_JPEG_QUALITY, it) }
+        if (!ok) throw EmailAttachmentException(EmailAttachmentLimit.UNSUPPORTED_IMAGE)
+        return clean
+    } catch (e: Exception) {
         outputFile?.delete()
-        null
+        throw e
     } finally {
         oriented?.recycle()
         decoded?.recycle()

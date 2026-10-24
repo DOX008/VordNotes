@@ -358,6 +358,7 @@ class AuthViewModel(
 
                     diary.filter { it.id != 0 }.forEach { d ->
                         DiaryImageSync.upload(
+                            app,
                             firestore, user.uid, d.id,
                             d.images.split("\n").filter { it.isNotBlank() }
                         )
