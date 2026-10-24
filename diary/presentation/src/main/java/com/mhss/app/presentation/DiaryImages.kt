@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -130,7 +131,7 @@ fun FullScreenImageDialog(path: String, onDismiss: () -> Unit) {
                     }
                 }
                 .pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.detectTapGestures(
+                    detectTapGestures(
                         onDoubleTap = {
                             if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 3f
                         }
